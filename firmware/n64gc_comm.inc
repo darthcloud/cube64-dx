@@ -227,6 +227,7 @@ bit_loop
 
 not_last_byte
 	microsecond_pad
+	microsecond_pad
 	incf	FSR, f		; 2.2us  Point at the next byte
 	movlw	8		; 2.4us  Reinitialize the bit counter
 	movwf	bit_count	; 2.6us
