@@ -10,7 +10,8 @@
 	;; This firmware is designed to run on a mid-range PIC microcontroller
 	;; clocked at 20 MHz. The macros herein let you transmit and receive
 	;; arbitrary-sized buffers of data using the low-level encoding used
-	;; by the N64 and Gamecube.
+	;; by the N64 and Gamecube. Even though all timing here refers to a
+	;; 20 MHz clock, it can be adjusted for 24 MHz by #define'ing N64GC_CLOCK_24
 	;;
 	;; Additionally, this header includes #defines related to the higher-level
 	;; bits of the protocol.
@@ -82,6 +83,15 @@
 	;; Time and Majora's Mask.
 	;;
 
+	;; It's easy to convert code from 20MHz timing to 24MHz- at 20MHz, we get
+	;; 5 cycles per microsecond, and at 24MHz we get six. So, if we make sure
+	;; one instance of this macro is executed each microsecond, this same code
+	;; should work at either frequency.
+microsecond_pad	macro
+#ifdef N64GC_CLOCK_24
+	nop
+#endif
+	endm
 
 	;; *******************************************************************************
 	;; *********************************************************** Definitions *******
@@ -174,10 +184,12 @@ n64gc_tx_buffer macro port, bit, wide_stop_bit
 	;; for the next bit. This is implemented in the form of three alternate endings
 	;; for the loop.
 bit_loop
+	microsecond_pad
 	rlf	INDF, f		; 3.8us  Rotate the next bit into C
 	bcf	port, bit	; 0.0us  The falling edge begins another bit
 	goto	$+1		; 0.2us
 	nop			; 0.6us
+	microsecond_pad
 	btfsc	STATUS, C	; 0.8us  Our bit is in the C flag...
 	bsf	port, bit	; 1.0us  Rising edge for 1 bits
 	decfsz	bit_count, f	; 1.2us  Is this the last bit?
@@ -186,15 +198,19 @@ bit_loop
 	decfsz	byte_count,f	; 1.6us  Is this the last byte?
 	goto	not_last_byte	; 1.8us	 Yet another alternate ending for the last byte...
 
+	microsecond_pad
 	goto	$+1		; 2.0us
 	goto	$+1		; 2.4us
+	microsecond_pad
 	btfss	STATUS, C	; 2.8us
 	bsf	port, bit	; 3.0us  Rising edge for 0 bits
 	goto	$+1		; 3.2us
 	goto	$+1		; 3.6us
+	microsecond_pad
 	bcf	port, bit	; 0.0us  Begin a stop bit
 	bcf	STATUS, RP0	; 0.2us  Always leave in bank 0
 	nop			; 0.4us
+	microsecond_pad
 	movlw	8		; 0.6us  Setup for the next receive
 	movwf	bit_count	; 0.8us
 
@@ -210,6 +226,7 @@ bit_loop
 				;        stop bit, so it ends 2.4us after we return.
 
 not_last_byte
+	microsecond_pad
 	incf	FSR, f		; 2.2us  Point at the next byte
 	movlw	8		; 2.4us  Reinitialize the bit counter
 	movwf	bit_count	; 2.6us
@@ -219,6 +236,8 @@ not_last_byte
 	goto	bit_loop	; 3.4us
 
 not_last_bit
+	microsecond_pad
+	microsecond_pad
 	goto	$+1		; 1.8us
 	goto	$+1		; 2.2us
 	nop			; 2.6us
@@ -257,12 +276,14 @@ n64gc_rx_buffer macro port, bit, byte_count, clear_watchdog
 	;; The overhead from sampling to the beginning of the next poll needs to
 	;; be less than 2us (10 cycles)
 bit_loop
+	microsecond_pad
 	if	clear_watchdog
 	clrwdt
 	endif
 
 	btfsc	port, bit	; 0.0us  Poll for the beginning of the bit, max 0.6us jitter
 	goto	bit_loop	; 0.2us
+	microsecond_pad
 	rlf	INDF, f		; 0.4us  Make room for the new bit
 	bcf	INDF, 0		; 0.6us  Assume it's 0 to begin with
 	decfsz	bit_count, f	; 0.8us  Is this the last bit?
@@ -273,25 +294,30 @@ bit_loop
 
 	movlw	8		; 1.6us  Reset bit count
 	movwf	bit_count	; 1.8us
+	microsecond_pad
 	btfsc	port, bit	; 2.0us  Sample the incoming bit
 	bsf	INDF, 0		; 2.2us
 	return
 
 not_last_byte
+	microsecond_pad
 	movlw	8		; 1.8us
 	btfsc	port, bit	; 2.0us  Sample the incoming bit
 	bsf	INDF, 0		; 2.2us
 	incf	FSR, f		; 2.4us  Next byte...
 	movwf	bit_count	; 2.6us  Reset bit count
+	microsecond_pad
 	btfsc	port, bit	; 2.8us  Wait for the data line to go back high
 	goto	bit_loop	; 3.0us
 	goto	$-2		; 3.2us
 
 not_last_bit
+	microsecond_pad
 	nop			; 1.4us
 	goto	$+1		; 1.6us
 	btfsc	port, bit	; 2.0us  Sample the incoming bit
 	bsf	INDF, 0		; 2.2us
+	microsecond_pad
 	btfsc	port, bit	; 2.4us  Wait for the data line to go back high
 	goto	bit_loop	; 2.6us
 	goto	$-2		; 2.8us
