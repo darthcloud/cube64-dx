@@ -1,0 +1,148 @@
+======
+cube64
+======
+
+Introduction
+------------
+
+This is a project to build an adaptor for using Gamecube controllers
+with N64 consoles. The motivation behind this is that the N64 has some
+really great games, but the controller hardware is rather bad- the
+joysticks wear out quickly, and the layout is odd. The Gamecube
+controllers, however, have a superset of the features and a much
+better joystick.
+
+A secondary goal of this project is to more thoroughly reverse engineer
+the protocols involved and create reusable libraries for interfacing PIC
+microcontrollers to N64 and Gamecube devices. The very basics of reverse
+engineering the two protocols was done before I started this project,
+but I quickly discovered that there's much more to the protocol. I believe
+this project may be the first one to completely reverse engineer the
+protocol used by standard N64 controllers, including peripherals like the
+memory and rumble paks.
+
+All code here is released under the GPL. This means that if you have basic
+electronics skills and a way to program the microcontroller, you can build
+your own cube64 adaptor easily. The hardware is extremely simple, and all
+the complexity of reverse engineering and writing code is done for you ;)
+
+
+Usage
+-----
+
+The completed adaptor plugs into an N64 console, and a gamecube controller
+plugs into the adaptor. The default button mapping is as follows:
+
+   Gamecube       N64
+  ---------------------
+   Analog stick   Analog stick
+   D-pad          D-pad
+   A              A
+   B              B
+   Z              Z
+   Start          Start
+   R end-stop     R
+   L end-stop     L
+   C-stick        C buttons
+   X              C-down
+   Y              B
+
+This button mapping is stored in non-volatile memory, and tt may be modified during
+gameplay. To change the mapping for one button:
+
+  1. Hold down the L and R buttons down most of the way, but not enough to
+     push the end-stop buttons, and press Start.
+
+  2. If you have the rumble power connected, you should feel a brief rumble.
+
+  3. Press the button you wish to remap. This includes the C-stick and D-pad, since
+     they emulate buttons.
+
+  4. Press the button you want to map it to. This button is always interpreted
+     according to the above defaults, so for example pressing Y here would actually
+     map to B. This has the effect that pressing the same button you pressed in step
+     3 always resets that button to its default mapping.
+
+  5. If the mapping was successful and you have rumble power connected, you should feel
+     a brief rumble.
+
+To reset all mappings to the above defaults:
+
+  1. Hold down the L and R buttons down most of the way, but not enough to
+     push the end-stop buttons, and press Z.
+
+  2. If you have the rumble power connected and the reset was successful, you should
+     feel a brief rumble.
+
+
+The adaptor handles calibration in almost the exact same way a Gamecube does. If
+your joystick is drifting or nonresponsive during gameplay, you should be able to
+recalibrate it by performing any of the following actions without touching the
+joystick, C-stick, L button, or R button:
+
+  1. Hold down X, Y, and Start for a couple seconds during gameplay
+
+  2. Unplug the controller from the adaptor and plug it back in
+
+  3. Unplug the adaptor from the N64 and plug it back in
+
+  4. Turn off the N64 then turn it back on. (The reset button won't
+     recalibrate, since the adaptor doesn't lose power or get reinitialized)
+
+
+Hardware
+--------
+
+There are currently two versions of the Cube64 hardware:
+
+  - The "Cube64 Basic" uses a very common PIC16F84A microcontroller, and
+    requires an external 5V power supply. Just about any electronics hobbyist
+    should be able to build it easily. 
+
+  - The "Cube64 Mini" uses a tiny 8-pin PIC12F629 microcontroller, and
+    includes a charge pump that generates the 5V supply for the rumble motor.
+    It is smaller and more convenient than the Cube64 Basic, but it requires
+    a less common microcontroller and a charge pump that's only available
+    in surface mount packages.
+
+Both versions of the hardware have the same button remapping features
+and responsiveness, as the only difference in their firmware is a few lines
+worth of compile-time configuration. You can also of course use the charge
+pump circuit from the Cube64 Mini with a PIC16F84A- but if you're using
+tiny chips anyway, might as well go all the way ;)
+
+
+Status
+------
+
+The protocol used between the N64 and controller, and between the controller
+and controller pak is well-understood now. An RS-232 to N64 bridge and several
+Python programs demonstrate just about all of the protocol.
+
+The necessary subset of the protocol has been implemented in the cube64
+firmware to emulate an official N64 controller with rumble pak. If 5V power
+for the motor can be supplied to the gamecube controller, its rumble motor
+will be used to emulate the N64 rumble pak.
+
+It should be possible to emulate the N64 memory pak using the results of my
+reverse engineering, but a 20 MHz PIC probably isn't fast enough to run the
+CRC algorithm in time to return a status byte to the N64. If a faster
+implementation of the CRC is discovered or a processor about twice as fast is
+used, the memory pak could be emulated easily.
+
+
+Contents
+--------
+
+  firmware:  Source code for the firmware, in PIC assembly. I develop this
+             mostly using the open source "gputils" package, but I occasionally
+             test it with MPLAB. The firmware for the adaptor itself is
+             "cube64.asm", but there are a few additional test programs
+             and libraries.
+
+  hardware:  This includes schematics for the adaptor, in PDF and gschem format.
+
+  notes:     Utilities and documentation produced while reverse engineering
+
+--
+Micah Dowty <micah@navi.cx>
