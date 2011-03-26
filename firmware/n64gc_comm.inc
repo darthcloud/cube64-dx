@@ -1,6 +1,7 @@
 	;;
 	;; N64 and Gamecube controller port communications macros
 	;; Copyright (C) 2004 Micah Dowty <micah@navi.cx>
+	;;               2011 Jacques Gagnon <darthcloud@gmail.com>
 	;;
 	;;   This program is free software; you can redistribute it and/or modify
 	;;   it under the terms of the GNU General Public License as published by
@@ -30,7 +31,7 @@
 	;; of this information was reverse engineered by the author.
 	;;
 	;; The serial format is the same as that used by the gamecube: zeroes
-	;; are 1us off 3us on, ones are 3us off 1us on. All packets are a multiple
+	;; are 3us off 1us on, ones are 1us off 3us on. All packets are a multiple
 	;; of 8 bits long not including the single '1' bit used as a stop bit.
 	;; The 0x02 and 0x03 packets use a 2us wide stop bit after the CRC rather
 	;; than the usual 1us.
@@ -39,13 +40,15 @@
 	;; following commands have been observed:
 	;;
 	;;   0x00 :   Asks the controller to identify itself. Returns a 24-bit word.
-	;;            An official N64 controller will respond with 0x050002 if it has
+	;;   0xFF :   An official N64 controller will respond with 0x050002 if it has
 	;;            nothing in the expansion slot, 0x050001 if it has a memory or
 	;;            rumble pak installed. I've seen 0x050003 from a controller with
 	;;            a memory pak, but I don't know what the extra bit signifies.
 	;;
 	;;            This command has the side-effect of causing the controller to
 	;;            re-check whether a new controller pak has been plugged in.
+	;;
+	;;            0xFF is only used with early N64 games.
 	;;
 	;;   0x01 :   Returns a 32-bit status word including all button and axis state.
 	;;            The format of this status word is documented in the sources above.
@@ -99,9 +102,10 @@ microsecond_pad	macro
 
 	;; 1-byte commands sent from N64 to controller
 	#define N64_COMMAND_IDENTIFY	0x00
-	#define N64_COMMAND_STATUS	0x01
+	#define N64_COMMAND_STATUS		0x01
 	#define N64_COMMAND_READ_BUS	0x02
 	#define N64_COMMAND_WRITE_BUS	0x03
+	#define N64_COMMAND_OLD_IDENT	0xFF
 
 	;; Controller pak identities
 	#define N64_PAK_MEMORY		0x00

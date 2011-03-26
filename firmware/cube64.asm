@@ -1,6 +1,7 @@
 	;;
 	;; Gamecube to N64 converter: use your gamecube controllers with an N64 console
 	;; Copyright (C) 2004 Micah Dowty <micah@navi.cx>
+	;;               2011 Jacques Gagnon <darthcloud@gmail.com>
 	;;
 	;;   This program is free software; you can redistribute it and/or modify
 	;;   it under the terms of the GNU General Public License as published by
@@ -67,7 +68,7 @@ io_init		macro
 		#define	ANSEL		0x9F
 
 io_init		macro
-		bcf	STATUS, RP0	; Clear output latches
+		bcf	STATUS, RP0
 		clrf	GPIO
 		movlw	0x0F		; Disable the comparator
 		movwf	CMCON
@@ -79,9 +80,36 @@ io_init		macro
 		errorlevel	+219
 		bcf	STATUS, RP0
 		endm
+		
+	;; Definitions for the PIC12F629 version
+	else
+	ifdef  __12F683
+	  	#include p12f683.inc
 
+		__CONFIG  _FCMEN_OFF & _IESO_OFF & _BOD_OFF & _CPD_OFF & _CP_OFF & _MCLRE_OFF & _PWRTE_OFF & _WDT_ON & _HS_OSC
+
+		#define N64_PIN		GPIO, 0
+		#define N64_TRIS	TRISIO, 0
+		#define	GAMECUBE_PIN	GPIO, 1
+		#define	GAMECUBE_TRIS	TRISIO, 1
+
+		#define RAM_START	0x20
+
+io_init		macro
+		bcf	STATUS, RP0	; Clear output latches
+		clrf	GPIO
+		movlw	0x0F		; Disable the comparator
+		movwf	CMCON0
+		bsf	STATUS, RP0
+		movlw	0x03		; The two controller pins begin as inputs
+		movwf	TRISIO
+		clrf	ANSEL
+		bcf	STATUS, RP0
+		endm
+	
 	else
 		messg	"Unsupported processor"
+	endif
 	endif
 	endif
 
@@ -674,6 +702,11 @@ n64_wait_for_command
 	xorlw	N64_COMMAND_IDENTIFY
 	btfsc	STATUS, Z
 	goto	n64_send_id
+	
+	movf	n64_command, w
+	xorlw	N64_COMMAND_OLD_IDENT
+	btfsc	STATUS, Z
+	goto	n64_send_id
 
 	movf	n64_command, w
 	xorlw	N64_COMMAND_STATUS
@@ -763,7 +796,7 @@ n64_send_status
 
 
 	;; The N64 asked for our identity. Report that we're an
-	;; N64 controller with the cotnroller pak slot occupied.
+	;; N64 controller with the controller pak slot occupied.
 n64_send_id
 	movlw	0x05
 	movwf	n64_id_buffer+0
