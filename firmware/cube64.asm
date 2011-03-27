@@ -68,7 +68,7 @@ io_init		macro
 		#define	ANSEL		0x9F
 
 io_init		macro
-		bcf	STATUS, RP0
+		bcf	STATUS, RP0		; Clear output latches
 		clrf	GPIO
 		movlw	0x0F		; Disable the comparator
 		movwf	CMCON
@@ -81,7 +81,7 @@ io_init		macro
 		bcf	STATUS, RP0
 		endm
 		
-	;; Definitions for the PIC12F629 version
+	;; Definitions for the PIC12F683 version
 	else
 	ifdef  __12F683
 	  	#include p12f683.inc
@@ -96,7 +96,7 @@ io_init		macro
 		#define RAM_START	0x20
 
 io_init		macro
-		bcf	STATUS, RP0	; Clear output latches
+		bcf	STATUS, RP0		; Clear output latches
 		clrf	GPIO
 		movlw	0x0F		; Disable the comparator
 		movwf	CMCON0
@@ -551,8 +551,10 @@ accept_remap_source
 	;; the button mapping to EEPROM.
 accept_remap_dest
 	banksel	EEDATA
-	movwf	EEDATA				; Destination button is data, source is address
+	movwf	EEDATA		; Destination button is data, source is address.
+	bcf	STATUS, RP0		; No mirror of GPR in Bank 1 for 12F683 need to switch to Bank 0 for variables access.
 	movf	remap_source_button, w
+	banksel EEDATA
 	movwf	EEADR
 	call	eewrite
 	bsf	FLAG_WAITING_FOR_RELEASE
