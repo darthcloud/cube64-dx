@@ -145,6 +145,7 @@ io_init		macro
 		calibration_count
 		rumble_feedback_count
 		remap_source_button
+		controller_id
 
 		;; Stored calibration for each gamecube axis
 		joystick_x_calibration
@@ -192,6 +193,10 @@ startup
 	clrf	flags
 	clrf	calibration_count
 	clrf	rumble_feedback_count
+	
+	;;Set controller id to rumble pak.
+	movlw	0x01
+	movwf	controller_id
 
 	movlw	.34			; Reset bus_byte_count to 34. Keeping this set beforehand
 	movwf	bus_byte_count		;   saves a few precious cycles in receiving bus writes.
@@ -516,6 +521,8 @@ check_remap_combo
 	goto	pressed_remap_combo
 	btfsc	gamecube_buffer + GC_Z
 	goto	pressed_reset_combo
+	btfsc	gamecube_buffer + GC_X
+	goto	pressed_cont_id_combo
 	return
 
 
@@ -535,7 +542,14 @@ pressed_reset_combo
 	bsf	FLAG_WAITING_FOR_RELEASE
 	call	reset_eeprom
 	goto	start_rumble_feedback
-
+	
+	;; The controller id combo was pressed. Toggle the controller id netween 0x01 and 0x02.
+pressed_cont_id_combo
+	bsf	FLAG_WAITING_FOR_RELEASE
+	movlw	0x03
+	xorwf	controller_id, w
+	movwf	controller_id
+	goto	start_rumble_feedback
 
 	;; Accept the virtual button code for the remap source in 'w', and prepare
 	;; to accept the remap destination.
@@ -800,11 +814,12 @@ n64_send_status
 	;; The N64 asked for our identity. Report that we're an
 	;; N64 controller with the controller pak slot occupied.
 n64_send_id
+	
 	movlw	0x05
 	movwf	n64_id_buffer+0
 	movlw	0x00
 	movwf	n64_id_buffer+1
-	movlw	0x01
+	movf	controller_id, w
 	movwf	n64_id_buffer+2
 
 	movlw	n64_id_buffer		; Transmit the ID buffer

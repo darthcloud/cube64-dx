@@ -66,6 +66,7 @@ gameplay. To change the mapping for one button:
   5. If the mapping was successful and you have rumble power connected, you should feel
      a brief rumble.
 
+	 
 To reset all mappings to the above defaults:
 
   1. Hold down the L and R buttons down most of the way, but not enough to
@@ -73,8 +74,21 @@ To reset all mappings to the above defaults:
 
   2. If you have the rumble power connected and the reset was successful, you should
      feel a brief rumble.
+	 
+To toggle between displaying the controller as a controller without rumble pak (empty controller slot)
+or with a rumble pak (Adaptor always start with rumble enabled):
 
+  1. Hold down the L and R buttons down most of the way, but not enough to
+     push the end-stop buttons, and press X.
+	 
+  2. If you have the rumble power connected and the reset was successful, you should
+     feel a brief rumble.
+	 
+*Some game do not periodicaly check the identity of the controller and might keep sending rumble information.
+ This feature is usefull for some game that repport error with a rumble pak. For those games, immediately
+ toggle to empty controller on boot to avoid the error.
 
+ 
 The adaptor handles calibration in almost the exact same way a Gamecube does. If
 your joystick is drifting or nonresponsive during gameplay, you should be able to
 recalibrate it by performing any of the following actions without touching the
@@ -146,3 +160,4 @@ Contents
 
 --
 Micah Dowty <micah@navi.cx>
+Jacques Gagnon <darthcloud@gmail.com>
