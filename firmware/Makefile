@@ -19,7 +19,7 @@ install-84: cube64_16f84.hex
 install-629: cube64_12f629.hex
 	pista < pista-629.conf
 	
-install-683: cube64_12f629.hex
+install-683: cube64_12f683.hex
 	pista < pista-683.conf
 	
 clean:

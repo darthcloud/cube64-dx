@@ -181,7 +181,9 @@ io_init		macro
 	#define	FLAG_REMAP_SOURCE_WAIT		flags, 3
 	#define	FLAG_REMAP_DEST_WAIT		flags, 4
 
-
+	;; Is the GC controller a Wavebird?
+	#define	WAVEBIRD					flags, 5
+	
 	;; *******************************************************************************
 	;; ******************************************************  Initialization  *******
 	;; *******************************************************************************
@@ -194,7 +196,7 @@ startup
 	clrf	calibration_count
 	clrf	rumble_feedback_count
 	
-	;;Set controller id to rumble pak.
+	;;Set controller id to occupied slot.
 	movlw	0x01
 	movwf	controller_id
 
@@ -221,7 +223,22 @@ startup
 	;; Check our EEPROM for validity, and reset it if it's blank or corrupted
 	call	validate_eeprom
 
-	;; Calibrate as soon as the N64 is powered up and the controller is plugged in.
+	;; Wavebird support only for 12f683 not enough flash in other PICs.
+	ifdef __12F683
+	
+		;; To detect if the GC controller is an Wavebird we send a identify command (0x00)
+		;; to the controller we then follow with n64 task since the controller won't be reponding 
+		;; any command for a while.
+		call	gamecube_get_id
+		call	n64_wait_for_command
+
+		;; If the controller is a Wavebird we need to send a magic command (0x4ED0C0) to enable it.
+		btfsc	WAVEBIRD
+		call	gamecube_init_wavebird
+	
+	endif
+
+	;; Calibrate the controller now since before that the Wavebird would not have repond to poll status.
 	;; Note that we have to continue on with n64_translate_status and n64_wait_for_command
 	;; because the gamecube controller won't be ready for another poll immediately.
 	call	gamecube_poll_status
@@ -765,6 +782,9 @@ n64_bus_write
 	xorlw	0xC0			; (only check the top 8 bits. This excludes a few address bits and all check bits)
 	btfss	STATUS, Z
 	return				; Nope, return. We ignore the initialization writes to 0x8000
+	
+	btfss	controller_id, 0	; Do not rumble if we are supose to be an empty controller.
+	return
 
 	bcf	FLAG_RUMBLE_MOTOR_ON	; Set the rumble flag from the low bit of the first data byte
 	btfsc	n64_bus_packet+0, 0
@@ -869,6 +889,59 @@ n64_rx_command
 	;; ******************************************************  Gamecube Interface  ***
 	;; *******************************************************************************
 
+	;; Wavebird support only on 12f683.
+	ifdef __12F683
+	
+	;; To support the Wavebird with most first poll the controller identity first.
+gamecube_get_id
+	movlw	0x00			; Put 0x00 in the gamecube_buffer
+	movwf	gamecube_buffer+0
+	
+	movlw	gamecube_buffer		; Transmit the gamecube_buffer
+	movwf	FSR
+	movlw	1
+	call	gamecube_tx
+	
+	movlw	gamecube_buffer		; Receive 3 status bytes
+	movwf	FSR
+	movlw	3
+	call	gamecube_rx
+	
+	btfsc	gamecube_buffer+0, 7	; Check only the MSB of the first byte since it's enough
+	bsf		WAVEBIRD				; to tell between normal controller and Wavebird.
+	
+	return
+	
+	;; If we receive 0xEBF0C0 (Wavebird ID) we most repond with the magic word
+	;; command 0x4ED0C0 to enable the WaveBird. It will not answer the poll status otherwise.
+	;; Sending this command to a normal controller will disable it until next power cycle!!
+	;; So we must only send this when a Wavebird is connected.
+gamecube_init_wavebird
+	movlw	0x4E			; Put 0x4ED0C0 in the gamecube_buffer to enable Wavebird.
+	movwf	gamecube_buffer+0
+	movlw	0xD0
+	movwf	gamecube_buffer+1
+	movlw	0xC0
+	movwf	gamecube_buffer+2
+
+	movlw	gamecube_buffer		; Transmit the gamecube_buffer
+	movwf	FSR
+	movlw	3
+	call	gamecube_tx
+	
+	movlw	gamecube_buffer		; Receive 3 status bytes
+	movwf	FSR
+	movlw	3
+	call	gamecube_rx
+	
+	call	n64_wait_for_command	; We have gamecube controller calibration ahead and the controller
+									; won't be ready to answer. So we do n64 commands meantime.
+	
+	return
+	
+	endif
+	
+	
 	;; Poll the gamecube controller's state by transmitting a magical
 	;; poll command (0x400300) then receiving 8 bytes of status.
 gamecube_poll_status
@@ -922,7 +995,12 @@ get_repeated_crc
 	movf	n64_bus_packet, w
 	movwf	PCL
 
-	org 0x300
+	ifdef __12F683
+	org 0x700
+	else
+	org 0x400
+	endif
+	
 crc_table
 	#include repeated_crc_table.inc
 

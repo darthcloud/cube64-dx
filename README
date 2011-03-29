@@ -30,8 +30,9 @@ the complexity of reverse engineering and writing code is done for you ;)
 Usage
 -----
 
-The completed adaptor plugs into an N64 console, and a gamecube controller
-plugs into the adaptor. The default button mapping is as follows:
+The completed adaptor plugs into an N64 console, and a standard gamecube controller
+or Wavebird (Only for 12f683 version) plugs into the adaptor. 
+The default button mapping is as follows:
 
    Gamecube       N64
   ---------------------
@@ -75,20 +76,23 @@ To reset all mappings to the above defaults:
   2. If you have the rumble power connected and the reset was successful, you should
      feel a brief rumble.
 	 
-To toggle between displaying the controller as a controller without rumble pak (empty controller slot)
-or with a rumble pak (Adaptor always start with rumble enabled):
+	 
+To toggle between displaying the controller with empty slot and occupied slot (See notes below):
 
   1. Hold down the L and R buttons down most of the way, but not enough to
      push the end-stop buttons, and press X.
 	 
-  2. If you have the rumble power connected and the reset was successful, you should
+  2. If you have the rumble power connected and the toggle was successful, you should
      feel a brief rumble.
-	 
-*Some game do not periodicaly check the identity of the controller and might keep sending rumble information.
- This feature is usefull for some game that repport error with a rumble pak. For those games, immediately
- toggle to empty controller on boot to avoid the error.
 
- 
+Note 1: 
+	This setting is volatile. Adapter alway start as occupied on boot.
+
+Note 2: 
+	This feature is usefull for some game that repport error with a rumble pak.
+	For those games, immediately toggle to empty controller on boot to avoid the error.
+
+		
 The adaptor handles calibration in almost the exact same way a Gamecube does. If
 your joystick is drifting or nonresponsive during gameplay, you should be able to
 recalibrate it by performing any of the following actions without touching the
