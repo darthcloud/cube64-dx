@@ -998,7 +998,7 @@ get_repeated_crc
 	ifdef __12F683
 	org 0x700
 	else
-	org 0x400
+	org 0x300
 	endif
 	
 crc_table
