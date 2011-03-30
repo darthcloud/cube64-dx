@@ -123,8 +123,9 @@ io_init		macro
 	;; EEPROM or one with different data in it, we reinitialize it.
 	;; Change this value if the EEPROM data format changes.
 	;;
-	#define	EEPROM_MAGIC_WORD	0xEF71
-	#define EEPROM_MAGIC_ADDR	0x20
+	#define	EEPROM_MAGIC_WORD	0xEC70
+	#define EEPROM_MAGIC_ADDR	0x40
+	#define EEPROM_LAST_KEY_MAP	0x50
 
 
 	;; Reset and interrupt vectors
@@ -167,6 +168,12 @@ io_init		macro
 		gamecube_buffer:8
 		n64_status_buffer:4
 	endc
+	
+	ifdef __12F683
+		cblock	0x60
+			active_key_map
+		endc
+	endif
 
 	;; The rumble motor should be on
 	#define	FLAG_RUMBLE_MOTOR_ON		flags, 0
@@ -182,7 +189,8 @@ io_init		macro
 	#define	FLAG_REMAP_DEST_WAIT		flags, 4
 
 	;; Is the GC controller a Wavebird?
-	#define	WAVEBIRD					flags, 5
+	#define	WAVEBIRD					flags, 5			
+	
 	
 	;; *******************************************************************************
 	;; ******************************************************  Initialization  *******
@@ -195,6 +203,10 @@ startup
 	clrf	flags
 	clrf	calibration_count
 	clrf	rumble_feedback_count
+	
+	ifdef __12F683
+		clrf	active_key_map
+	endif
 	
 	;;Set controller id to occupied slot.
 	movlw	0x01
@@ -364,6 +376,7 @@ no_calibration_combo
 	#define	BTN_C_UP	0x0F
 
 	#define	NUM_VIRTUAL_BUTTONS	0x10
+	#define NUM_EEPROM_DATA		0x40
 
 
 	;; Map a gamecube button to a virtual button, and eventually to an N64 button
@@ -540,6 +553,18 @@ check_remap_combo
 	goto	pressed_reset_combo
 	btfsc	gamecube_buffer + GC_X
 	goto	pressed_cont_id_combo
+	
+	ifdef __12F683
+		btfsc	gamecube_buffer + GC_D_UP
+		goto	pressed_preset_up
+		btfsc	gamecube_buffer + GC_D_LEFT
+		goto	pressed_preset_left
+		btfsc	gamecube_buffer + GC_D_RIGHT
+		goto	pressed_preset_right
+		btfsc	gamecube_buffer + GC_D_DOWN
+		goto	pressed_preset_down
+	endif
+	
 	return
 
 
@@ -560,14 +585,82 @@ pressed_reset_combo
 	call	reset_eeprom
 	goto	start_rumble_feedback
 	
-	;; The controller id combo was pressed. Toggle the controller id netween 0x01 and 0x02.
+	;; The controller id combo was pressed. Toggle the controller id between 0x01 and 0x02.
 pressed_cont_id_combo
 	bsf	FLAG_WAITING_FOR_RELEASE
 	movlw	0x03
 	xorwf	controller_id, w
 	movwf	controller_id
 	goto	start_rumble_feedback
-
+	
+	ifdef __12F683
+	
+		;; Load preset up.
+pressed_preset_up
+	bsf	FLAG_WAITING_FOR_RELEASE
+	movlw	0x00
+	movwf	active_key_map
+	
+	banksel	EEDATA		; Save last used preset in eeprom.
+	movwf	EEDATA
+	bcf		STATUS, RP0
+	movlw	EEPROM_LAST_KEY_MAP
+	banksel EEADR
+	movwf	EEADR
+	call	eewrite
+	
+	goto	start_rumble_feedback
+	
+	;; Load preset left.
+pressed_preset_left
+	bsf	FLAG_WAITING_FOR_RELEASE
+	movlw	0x10
+	movwf	active_key_map
+	
+	banksel	EEDATA		; Save last used preset in eeprom.
+	movwf	EEDATA
+	bcf		STATUS, RP0
+	movlw	EEPROM_LAST_KEY_MAP
+	banksel EEADR
+	movwf	EEADR
+	call	eewrite
+	
+	goto	start_rumble_feedback
+	
+	;; Load preset right.
+pressed_preset_right
+	bsf	FLAG_WAITING_FOR_RELEASE
+	movlw	0x20
+	movwf	active_key_map
+	
+	banksel	EEDATA		; Save last used preset in eeprom.
+	movwf	EEDATA
+	bcf		STATUS, RP0
+	movlw	EEPROM_LAST_KEY_MAP
+	banksel EEADR
+	movwf	EEADR
+	call	eewrite
+	
+	goto	start_rumble_feedback
+	
+	;; Load preset down.
+pressed_preset_down
+	bsf	FLAG_WAITING_FOR_RELEASE
+	movlw	0x30
+	movwf	active_key_map
+	
+	banksel	EEDATA		; Save last used preset in eeprom.
+	movwf	EEDATA
+	bcf		STATUS, RP0
+	movlw	EEPROM_LAST_KEY_MAP
+	banksel EEADR
+	movwf	EEADR
+	call	eewrite
+	
+	goto	start_rumble_feedback
+	
+	endif
+	
 	;; Accept the virtual button code for the remap source in 'w', and prepare
 	;; to accept the remap destination.
 accept_remap_source
@@ -585,7 +678,10 @@ accept_remap_dest
 	movwf	EEDATA		; Destination button is data, source is address.
 	bcf	STATUS, RP0		; No mirror of GPR in Bank 1 for 12F683 need to switch to Bank 0 for variables access.
 	movf	remap_source_button, w
-	banksel EEDATA
+	ifdef __12F683					; Add offset to eeprom address to read the right preset bank.
+		addwf	active_key_map, w
+	endif
+	banksel EEADR
 	movwf	EEADR
 	call	eewrite
 	bsf	FLAG_WAITING_FOR_RELEASE
@@ -606,6 +702,12 @@ validate_eeprom
 	xorlw	EEPROM_MAGIC_WORD & 0xFF
 	btfss	STATUS, Z
 	goto	reset_eeprom
+	
+	ifdef __12F683
+		movlw	EEPROM_LAST_KEY_MAP	; Load last used preset.
+		call	eeread
+		movwf	active_key_map
+	endif
 	return
 
 
@@ -613,6 +715,7 @@ validate_eeprom
 reset_eeprom
 	banksel	EEADR
 	clrf	EEADR			; Loop over all virtual buttons, writing the identity mapping
+next_eeprom_bank
 	clrf	EEDATA
 eeprom_reset_loop
 	call	eewrite
@@ -623,7 +726,11 @@ eeprom_reset_loop
 	xorlw	NUM_VIRTUAL_BUTTONS
 	btfss	STATUS, Z
 	goto	eeprom_reset_loop
-
+	movf	EEADR, w
+	xorlw	NUM_EEPROM_DATA
+	btfss	STATUS, Z
+	goto	next_eeprom_bank
+	
 	movlw	EEPROM_MAGIC_ADDR	; Write the magic word
 	banksel	EEADR
 	movwf	EEADR
@@ -635,6 +742,16 @@ eeprom_reset_loop
 	movwf	EEADR
 	movlw	EEPROM_MAGIC_WORD & 0xFF
 	movwf	EEDATA
+	
+	ifdef __12F683		;; Init last active preset in eeprom.
+		call	eewrite
+		
+		movlw	EEPROM_LAST_KEY_MAP
+		banksel	EEADR
+		movwf	EEADR
+		movlw	0x00
+		movwf	EEDATA
+	endif
 	goto	eewrite
 
 
@@ -643,6 +760,9 @@ eeprom_reset_loop
 	;; bits manually, since the PIC16F84A and PIC12F629 keep the EEPROM
 	;; registers in different memory banks.
 eeread
+	ifdef __12F683
+		addwf	active_key_map, w	; Add offset to read in right present bank.
+	endif
 	banksel	EEADR
 	movwf	EEADR
 	banksel	EECON1

@@ -91,6 +91,23 @@ Note 1:
 Note 2: 
 	This feature is usefull for some game that repport error with a rumble pak.
 	For those games, immediately toggle to empty controller on boot to avoid the error.
+	
+	
+It is possible to save up to 4 presets of buttons configuration so you can easily use differents keys
+mapping in different games. To change between the preset do the following (Only available in 12F683 version):
+
+  1. Hold down the L and R buttons down most of the way, but not enough to
+     push the end-stop buttons, and press one of the direction on the gamecube "cross" pad.
+	 
+  2. If you have the rumble power connected and the preset change was successful, you should
+     feel a brief rumble.
+	 
+  3. All preset by default hold the default button configuration. Just select one of 4
+     presets and then change the button configuration using the button mapping key combo
+	 described above.
+
+  4. When you select a preset it is saved into the eeprom so the next time you power up
+     the adaptor the last used preset will be load automaticaly!
 
 		
 The adaptor handles calibration in almost the exact same way a Gamecube does. If
