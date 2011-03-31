@@ -600,48 +600,21 @@ pressed_preset_up
 	bsf	FLAG_WAITING_FOR_RELEASE
 	movlw	0x00
 	movwf	active_key_map
-	
-	banksel	EEDATA		; Save last used preset in eeprom.
-	movwf	EEDATA
-	bcf		STATUS, RP0
-	movlw	EEPROM_LAST_KEY_MAP
-	banksel EEADR
-	movwf	EEADR
-	call	eewrite
-	
-	goto	start_rumble_feedback
+	goto save_active_key_layout
 	
 	;; Load preset left.
 pressed_preset_left
 	bsf	FLAG_WAITING_FOR_RELEASE
 	movlw	0x10
 	movwf	active_key_map
-	
-	banksel	EEDATA		; Save last used preset in eeprom.
-	movwf	EEDATA
-	bcf		STATUS, RP0
-	movlw	EEPROM_LAST_KEY_MAP
-	banksel EEADR
-	movwf	EEADR
-	call	eewrite
-	
-	goto	start_rumble_feedback
+	goto save_active_key_layout
 	
 	;; Load preset right.
 pressed_preset_right
 	bsf	FLAG_WAITING_FOR_RELEASE
 	movlw	0x20
 	movwf	active_key_map
-	
-	banksel	EEDATA		; Save last used preset in eeprom.
-	movwf	EEDATA
-	bcf		STATUS, RP0
-	movlw	EEPROM_LAST_KEY_MAP
-	banksel EEADR
-	movwf	EEADR
-	call	eewrite
-	
-	goto	start_rumble_feedback
+	goto save_active_key_layout
 	
 	;; Load preset down.
 pressed_preset_down
@@ -649,7 +622,9 @@ pressed_preset_down
 	movlw	0x30
 	movwf	active_key_map
 	
-	banksel	EEDATA		; Save last used preset in eeprom.
+	;; Save last used preset in eeprom.
+save_active_key_layout
+	banksel	EEDATA
 	movwf	EEDATA
 	bcf		STATUS, RP0
 	movlw	EEPROM_LAST_KEY_MAP
