@@ -1,4 +1,6 @@
+#summary How to compile on a Windows machine.
 #labels Windows
+
 =Compiling from source.=
 
 ==Stuff needed==
