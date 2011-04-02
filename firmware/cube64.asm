@@ -8,9 +8,8 @@
 	;;   the Free Software Foundation; either version 2 of the License, or
 	;;   (at your option) any later version.
 	;;
-	;; This firmware is designed to run on a PIC16F84A or PIC12F629 microcontroller
-	;; clocked at 20 MHz. The '84 is one of the most common microcontrollers ever,
-	;; whereas the '629 is a newer 8-pin micro.
+	;; This firmware is designed to run on a PIC16F84A, PIC12F629 or PIC12F683
+	;; microcontroller clocked at 20 MHz.
 	;;
 	;; See n64gc_comm.inc for code and documentation related to the protocol
 	;; used between here, the N64, and the Gamecube.
@@ -172,6 +171,10 @@ io_init		macro
 	ifdef __12F683
 		cblock	0x60
 			active_key_map
+			gc_value_x2:2
+			gc_value_x8:2
+			gc_value_x16:2
+			counter
 		endc
 	endif
 
@@ -214,6 +217,7 @@ startup
 
 	movlw	.34			; Reset bus_byte_count to 34. Keeping this set beforehand
 	movwf	bus_byte_count		;   saves a few precious cycles in receiving bus writes.
+	
 
 	;; We use the watchdog to implicitly implement controller probing.
 	;; If we have no gamecube controller attached, gamecube_poll_status
@@ -402,8 +406,14 @@ next
 	;; Map an 8-bit 0x80-centered axis to an 8-bit signed axis.
 	;; Doesn't allow any remapping.
 map_axis macro src_byte, dest_byte
-	movlw	0x80
-	subwf	gamecube_buffer+src_byte, w
+	ifdef __12F683
+		movlw	0x18
+		subwf	gamecube_buffer+src_byte, w
+		call	gc_axis_to_n64_range
+	else
+		movlw	0x80
+		subwf	gamecube_buffer+src_byte, w
+	endif
 	movwf	n64_status_buffer+dest_byte
 	endm
 
@@ -421,6 +431,84 @@ map_button_axis macro axis_byte, lower_virtual, upper_virtual, lower_thresh, upp
 	btfsc	STATUS, C
 	call	remap_virtual_button			; C=1, B=0, (upper_thresh+1) <= axis
 	endm
+	
+	;; GameCube axis value range between ~[24, 232] so an aprocimate resolution of 208.
+	;; N64 axis value range between ~[-84, 84] so an aproxiamte resolution of 168.
+	;; Most N64 game will accep a direct mapping of the gamecube value and this will either
+	;; change nothing or add an added precition. However some game don't expect value over
+	;; 84 and get confused like Blast Corps. This function adapt the GameCube input into
+	;; the usual N64 value range by doing the following equation:
+	;;					((GC_Value-24)*26/32)-84
+	
+	ifdef __12F683
+	
+gc_axis_to_n64_range
+	clrf	gc_value_x2			; Clear register.
+	clrf	gc_value_x2+1
+	clrf	gc_value_x8
+	clrf	gc_value_x8+1
+	clrf	gc_value_x16
+	clrf	gc_value_x16+1
+	
+	movwf	gc_value_x16		; Save gc value.
+	
+	bcf 	STATUS, C			; Bit shifft left to multiply by 2.
+	rlf		gc_value_x16, f
+	rlf		gc_value_x16+1, f
+	
+	movf	gc_value_x16, w		; Save this result.
+	movwf	gc_value_x2
+	movf	gc_value_x16+1, w
+	movwf	gc_value_x2+1
+	
+	bcf 	STATUS, C			; 2 other bit shift left to multiply by 8 in total.
+	rlf		gc_value_x16, f
+	rlf		gc_value_x16+1, f
+	
+	bcf 	STATUS, C
+	rlf		gc_value_x16, f
+	rlf		gc_value_x16+1, f
+	
+	movf	gc_value_x16, w		; Save this result.
+	movwf	gc_value_x8
+	movf	gc_value_x16+1, w
+	movwf	gc_value_x8+1
+	
+	bcf 	STATUS, C			; Bit shift left again to multiply by 16 in total.
+	rlf		gc_value_x16, f
+	rlf		gc_value_x16+1, f
+	
+	movf	gc_value_x16, w		; Add gc_value_x16 to gc_value_x2.
+	addwf	gc_value_x2, f
+	movf	gc_value_x16+1, w
+	btfsc	STATUS, C
+	incf	gc_value_x16+1, w
+	addwf	gc_value_x2+1, f
+	
+	movf	gc_value_x8, w		; Add gc_value_x8 to gc_value_x2.
+	addwf	gc_value_x2, f
+	movf	gc_value_x8+1, w
+	btfsc	STATUS, C
+	incf	gc_value_x8+1, w
+	addwf	gc_value_x2+1, f
+	
+	clrf	counter				; Clear counter.
+	
+divide_32						; Devide gc_value by 32.
+	bcf		STATUS, C
+	rrf		gc_value_x2+1, f
+	rrf		gc_value_x2, f
+	incf	counter, f
+	movf	counter, w
+	xorlw	0x05
+	btfss	STATUS, Z
+	goto	divide_32
+	
+	movlw	0x54				; Transform the value into two's complement.
+	subwf	gc_value_x2, w
+	return
+	
+	endif
 
 
 	;; Copy status from the gamecube buffer to the N64 buffer. This first
@@ -929,7 +1017,6 @@ n64_send_status
 	;; The N64 asked for our identity. Report that we're an
 	;; N64 controller with the controller pak slot occupied.
 n64_send_id
-	
 	movlw	0x05
 	movwf	n64_id_buffer+0
 	movlw	0x00
