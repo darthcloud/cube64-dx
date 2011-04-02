@@ -1,0 +1,26 @@
+#labels Windows
+=Compiling from source.=
+
+==Stuff needed==
+  * Download [http://tortoisesvn.net/downloads.html TortoiseSVN]
+  * Download [http://sourceforge.net/projects/mingw/files/Automated%20MinGW%20Installer/mingw-get-inst/ MinGW]
+  * Download [http://sourceforge.net/projects/gputils/files/gputils-win32/0.13.7/ gputils]
+
+==Retrieving source code from SVN repository==
+  # First install TortoiseSVN on your machine and then reboot.
+  # Create a folder named "cube64-dx" somewhere on your computer.
+  # Right click on the folder and select "SVN Checkout..."
+  # Put "http://cube64-dx.googlecode.com/svn/" as URL and click OK.
+  # You should now download content of the whole repository.
+
+==Installing compilation environment==
+  # Install MinGW
+  # On the "Select Components" section of the installer select at the bottom both MSYS Basic system and MinGW Developper toolkit.
+  # Install gputils with default setting.
+  # You should be ready to compile now.
+
+==Compiling the program==
+  # Open MinGW terminal.
+  # Your C:\ is avaialble under /c/
+  # So do "cd /c/path_to_your_folder/cube64-dx/firmware/"
+  # Type "make" and the .hex file for programming the PIC will be build for each supported micro-controllers.
