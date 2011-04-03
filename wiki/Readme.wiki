@@ -1,4 +1,5 @@
 #summary Cube64-DX readme and manual.
+#labels Featured
 
 =Cube64-DX=
 
