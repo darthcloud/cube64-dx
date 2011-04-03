@@ -37,14 +37,14 @@ This button mapping is stored in non-volatile memory, and may be modified during
   # Press the button you want to map it to. This button is always interpreted according to the above defaults, so for example pressing Y here would actually map to B. This has the effect that pressing the same button you pressed in step always resets that button to its default mapping.
   # If the mapping was successful and you have rumble power connected, you should feel a brief rumble.
 
-
+<br><br>
 	 
 To reset all mappings to the above defaults:
 
   # Hold down the L and R buttons down most of the way, but not enough to push the end-stop buttons, and press Z.
   # If you have the rumble power connected and the reset was successful, you should feel a brief rumble.
 	
- 
+<br><br>
 	 
 To toggle between displaying the controller with empty slot and occupied slot (See notes below):
 
@@ -57,7 +57,7 @@ Note 1:
 Note 2: 
   * This feature is usefull for some game that repport error with a rumble pak. For those games, immediately toggle to empty controller on boot to avoid the error.
 	
-
+<br><br>
 	
 It is possible to save up to 4 sets of custom buttons layouts so you can easily use different keys mapping in different games. To change between the preset do the following (Only available in 12F683 version):
 
@@ -66,7 +66,7 @@ It is possible to save up to 4 sets of custom buttons layouts so you can easily 
   # All preset by default hold the default button configuration. Just select one of 4 presets and then change the button configuration using the button mapping key combo described above.
   # When you select a preset it is saved into the eeprom so the next time you power up the adaptor the last used preset will be load automaticaly!
 
-
+<br><br>
 		
 The adaptor handles calibration in almost the exact same way a Gamecube does. If your joystick is drifting or nonresponsive during gameplay, you should be able to recalibrate it by performing any of the following actions without touching the joystick, C-stick, L button, or R button:
 
@@ -106,4 +106,5 @@ It should be possible to emulate the N64 memory pak using the results of my reve
 
 
 Micah Dowty <micah@navi.cx>
+<br>
 Jacques Gagnon <darthcloud@gmail.com>
