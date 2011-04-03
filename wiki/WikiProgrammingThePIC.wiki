@@ -1,7 +1,7 @@
 #summary How to program the .hex file onto the micro-controller.
 #labels Windows,WinPic800
 
-=Programming The PIC
+=Programming The PIC=
 
 ==Stuff needed==
   * .hex for the right PIC model
