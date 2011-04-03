@@ -239,11 +239,11 @@ startup
 	;; Check our EEPROM for validity, and reset it if it's blank or corrupted
 	call	validate_eeprom
 
-	;; Wavebird support only for 12f683 not enough flash in other PICs.
+	;; Wavebird support only for 12f683, not enough flash in other PICs.
 	ifdef __12F683
 	
-		;; To detect if the GC controller is an Wavebird we send a identify command (0x00)
-		;; to the controller we then follow with n64 task since the controller won't be reponding 
+		;; To detect if the GC controller is a Wavebird, we send a identify command (0x00)
+		;; to the controller. We then follow with n64 task since the controller won't be reponding 
 		;; any command for a while.
 		call	gamecube_get_id
 		call	n64_wait_for_command
@@ -432,12 +432,12 @@ map_button_axis macro axis_byte, lower_virtual, upper_virtual, lower_thresh, upp
 	call	remap_virtual_button			; C=1, B=0, (upper_thresh+1) <= axis
 	endm
 	
-	;; GameCube axis value range between ~[24, 232] so an aprocimate resolution of 208.
-	;; N64 axis value range between ~[-84, 84] so an aproxiamte resolution of 168.
-	;; Most N64 game will accep a direct mapping of the gamecube value and this will either
-	;; change nothing or add an added precition. However some game don't expect value over
+	;; GameCube axis value range between ~[24, 232] so an approximate resolution of 208.
+	;; N64 axis value range between ~[-84, 84] so an approximate resolution of 168.
+	;; Most N64 game will accept a direct mapping of the gamecube value. This will either
+	;; change nothing or add an added precision/sensibility. However some games don't expect value over
 	;; 84 and get confused like Blast Corps. This function adapt the GameCube input into
-	;; the usual N64 value range by doing the following equation:
+	;; the usual N64 value range by doing the following operation:
 	;;					((GC_Value-24)*26/32)-84
 	
 	ifdef __12F683
@@ -494,7 +494,7 @@ gc_axis_to_n64_range
 	
 	clrf	counter				; Clear counter.
 	
-divide_32						; Devide gc_value by 32.
+divide_32						; Divide gc_value by 32.
 	bcf		STATUS, C
 	rrf		gc_value_x2+1, f
 	rrf		gc_value_x2, f
@@ -673,7 +673,7 @@ pressed_reset_combo
 	call	reset_eeprom
 	goto	start_rumble_feedback
 	
-	;; The controller id combo was pressed. Toggle the controller id between 0x01 and 0x02.
+	;; The controller id change combo was pressed. Toggle the controller id between 0x01 and 0x02.
 pressed_cont_id_combo
 	bsf	FLAG_WAITING_FOR_RELEASE
 	movlw	0x03
@@ -683,28 +683,28 @@ pressed_cont_id_combo
 	
 	ifdef __12F683
 	
-		;; Load preset up.
+	;; Load custom layout up.
 pressed_preset_up
 	bsf	FLAG_WAITING_FOR_RELEASE
 	movlw	0x00
 	movwf	active_key_map
 	goto save_active_key_layout
 	
-	;; Load preset left.
+	;; Load custom layout left.
 pressed_preset_left
 	bsf	FLAG_WAITING_FOR_RELEASE
 	movlw	0x10
 	movwf	active_key_map
 	goto save_active_key_layout
 	
-	;; Load preset right.
+	;; Load custom layout right.
 pressed_preset_right
 	bsf	FLAG_WAITING_FOR_RELEASE
 	movlw	0x20
 	movwf	active_key_map
 	goto save_active_key_layout
 	
-	;; Load preset down.
+	;; Load custom layout down.
 pressed_preset_down
 	bsf	FLAG_WAITING_FOR_RELEASE
 	movlw	0x30
@@ -741,7 +741,7 @@ accept_remap_dest
 	movwf	EEDATA		; Destination button is data, source is address.
 	bcf	STATUS, RP0		; No mirror of GPR in Bank 1 for 12F683 need to switch to Bank 0 for variables access.
 	movf	remap_source_button, w
-	ifdef __12F683					; Add offset to eeprom address to read the right preset bank.
+	ifdef __12F683					; Add offset to eeprom address to read the right custom buttons layout.
 		addwf	active_key_map, w
 	endif
 	banksel EEADR
@@ -767,7 +767,7 @@ validate_eeprom
 	goto	reset_eeprom
 	
 	ifdef __12F683
-		movlw	EEPROM_LAST_KEY_MAP	; Load last used preset.
+		movlw	EEPROM_LAST_KEY_MAP	; Load last used custom layout.
 		call	eeread
 		movwf	active_key_map
 	endif
@@ -806,7 +806,7 @@ eeprom_reset_loop
 	movlw	EEPROM_MAGIC_WORD & 0xFF
 	movwf	EEDATA
 	
-	ifdef __12F683		;; Init last active preset in eeprom.
+	ifdef __12F683		;; Init default layout in eeprom.
 		call	eewrite
 		
 		movlw	EEPROM_LAST_KEY_MAP
@@ -824,7 +824,7 @@ eeprom_reset_loop
 	;; registers in different memory banks.
 eeread
 	ifdef __12F683
-		addwf	active_key_map, w	; Add offset to read in right present bank.
+		addwf	active_key_map, w	; Add offset to read in right buttons layout.
 	endif
 	banksel	EEADR
 	movwf	EEADR
@@ -1015,7 +1015,7 @@ n64_send_status
 
 
 	;; The N64 asked for our identity. Report that we're an
-	;; N64 controller with the controller pak slot occupied.
+	;; N64 controller with the controller pak slot occupied or empty.
 n64_send_id
 	movlw	0x05
 	movwf	n64_id_buffer+0
@@ -1074,7 +1074,7 @@ n64_rx_command
 	;; Wavebird support only on 12f683.
 	ifdef __12F683
 	
-	;; To support the Wavebird with most first poll the controller identity first.
+	;; To support the Wavebird we must poll the controller identity first.
 gamecube_get_id
 	movlw	0x00			; Put 0x00 in the gamecube_buffer
 	movwf	gamecube_buffer+0
@@ -1094,7 +1094,7 @@ gamecube_get_id
 	
 	return
 	
-	;; If we receive 0xEBF0C0 (Wavebird ID) we most repond with the magic word
+	;; If we receive 0xEBF0C0 (Wavebird ID) we must repond with the magic word
 	;; command 0x4ED0C0 to enable the WaveBird. It will not answer the poll status otherwise.
 	;; Sending this command to a normal controller will disable it until next power cycle!!
 	;; So we must only send this when a Wavebird is connected.

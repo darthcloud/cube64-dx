@@ -30,8 +30,8 @@ the complexity of reverse engineering and writing code is done for you ;)
 Usage
 -----
 
-The completed adaptor plugs into an N64 console, and a standard gamecube controller
-or Wavebird (Only for 12f683 version) plugs into the adaptor. 
+The completed adaptor plugs into an N64 console, and a regular Gamecube
+controller or Wavebird (Only for 12f683 version) plugs into the adaptor. 
 The default button mapping is as follows:
 
    Gamecube       N64
@@ -48,7 +48,7 @@ The default button mapping is as follows:
    X              C-down
    Y              B
 
-This button mapping is stored in non-volatile memory, and tt may be modified during
+This button mapping is stored in non-volatile memory, and may be modified during
 gameplay. To change the mapping for one button:
 
   1. Hold down the L and R buttons down most of the way, but not enough to
@@ -93,7 +93,7 @@ Note 2:
 	For those games, immediately toggle to empty controller on boot to avoid the error.
 	
 	
-It is possible to save up to 4 presets of buttons configuration so you can easily use differents keys
+It is possible to save up to 4 sets of custom buttons layouts so you can easily use different keys
 mapping in different games. To change between the preset do the following (Only available in 12F683 version):
 
   1. Hold down the L and R buttons down most of the way, but not enough to
