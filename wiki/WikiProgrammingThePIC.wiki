@@ -15,6 +15,8 @@
   # Plug your JDM programmer into the serial port of your computer.
   # In !WinPic800 go into Setting => Hardware and select JDM Programmer and click "Apply edits".
   # Go into Device => Test Hardware, this should say "Harware Ok". If not check you are using the right COM port. Also using 64bits OS give often trouble. Try programming with 32bits OS instead.
+
+==Flashing the PIC==
   # On the top right corner of the application select the PIC series and PIC model you want to program.
   # Click on the Open icon and load the .hex file corresponding to the micro-controller you are using.
   # Click on the "Program All" icon to flash the PIC.
