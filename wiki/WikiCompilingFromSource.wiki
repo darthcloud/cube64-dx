@@ -1,5 +1,5 @@
 #summary How to compile on a Windows machine.
-#labels Windows
+#labels Windows,Featured
 
 =Compiling from source.=
 
