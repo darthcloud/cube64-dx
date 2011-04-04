@@ -959,7 +959,7 @@ n64_bus_write
 	movlw	n64_crc
 	movwf	FSR
 	movlw	1
-	call	n64_tx_widestop		; We need a 2us stop bit after all CRCs
+	call	n64_tx		; We need a 2us stop bit after all CRCs
 
 	movf	n64_bus_address, w	; Is this a write to the rumble pak?
 	xorlw	0xC0			; (only check the top 8 bits. This excludes a few address bits and all check bits)
@@ -1003,7 +1003,7 @@ pak_identify_fill_loop
 	movlw	n64_bus_packet		; Send back the data and CRC
 	movwf	FSR
 	movlw	.33
-	goto	n64_tx_widestop		; We need a 2us stop bit after all CRCs
+	goto	n64_tx;		; We need a 2us stop bit after all CRCs
 
 
 	;; The N64 asked for our button and joystick status
@@ -1044,14 +1044,8 @@ keep_waiting_for_idle
 
 	;; Before transmitting, we explicitly force the output latch low- it may have
 	;; been left high by a read-modify-write operation elsewhere.
+	;; For controller response we allways need an 2us stop bit.
 n64_tx
-	bsf	STATUS, RP0
-	bsf	N64_TRIS
-	bcf	STATUS, RP0
-	bcf	N64_PIN
-	n64gc_tx_buffer N64_TRIS, 0
-
-n64_tx_widestop
 	bsf	STATUS, RP0
 	bsf	N64_TRIS
 	bcf	STATUS, RP0
