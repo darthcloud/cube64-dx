@@ -213,6 +213,10 @@ startup
 	
 	ifdef __12F683
 		clrf	active_key_map
+		clrf	n64_status_buffer+0	; Start out with everything zeroed...
+		clrf	n64_status_buffer+1
+		clrf	n64_status_buffer+2
+		clrf	n64_status_buffer+3
 	endif
 	
 	;;Set controller id to occupied slot.
