@@ -251,11 +251,7 @@ startup
 		;; any command for a while.
 gc_controller_id_check
 		call	gamecube_get_id
-		clrf	n64_status_buffer+0	; Start out with everything zeroed...
-		clrf	n64_status_buffer+1
-		clrf	n64_status_buffer+2
-		clrf	n64_status_buffer+3
-		call	n64_wait_for_command
+		call	n64_wfc_empty_buffer
 
 		;; If the controller is a Wavebird we need to do some special initialization process first.
 		;; else we have a standard controller and we are ready to poll status.
@@ -263,11 +259,12 @@ gc_controller_id_check
 		goto	gc_controller_ready
 		
 		;; If we have an Wavebird associated with the receiver we are ready to init it.
-		;; else we go back ready the controller id.
+		;; else we go back reading the controller id.
 		btfss	WAVEBIRD_ASSOCIATED
 		goto	gc_controller_id_check
 		
 		call	gamecube_init_wavebird
+		call	n64_wfc_empty_buffer
 		
 	endif
 
@@ -896,7 +893,15 @@ update_rumble_feedback
 	;; *******************************************************************************
 	;; ******************************************************  N64 Interface *********
 	;; *******************************************************************************
-
+	
+	;; While waiting for a Wavebird to associate, we don't have any status poll
+	;; so we need to empty the n64_status_buffer before n64_wait_for_command.
+n64_wfc_empty_buffer
+	clrf	n64_status_buffer+0
+	clrf	n64_status_buffer+1
+	clrf	n64_status_buffer+2
+	clrf	n64_status_buffer+3
+		
 	;; Service commands coming in from the N64
 n64_wait_for_command
 	call	n64_wait_for_idle	; Ensure the line is idle first, so we don't jump in to the middle of a command
@@ -1144,13 +1149,6 @@ gamecube_init_wavebird
 	movwf	FSR
 	movlw	3
 	call	gamecube_rx
-	
-	clrf	n64_status_buffer+0	; Start out with everything zeroed...
-	clrf	n64_status_buffer+1
-	clrf	n64_status_buffer+2
-	clrf	n64_status_buffer+3
-	call	n64_wait_for_command	; We have gamecube controller calibration ahead and the controller
-									; won't be ready to answer. So we do n64 commands meantime.
 	
 	return
 	
