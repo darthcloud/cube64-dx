@@ -213,10 +213,6 @@ startup
 	
 	ifdef __12F683
 		clrf	active_key_map
-		clrf	n64_status_buffer+0	; Start out with everything zeroed...
-		clrf	n64_status_buffer+1
-		clrf	n64_status_buffer+2
-		clrf	n64_status_buffer+3
 	endif
 	
 	;;Set controller id to occupied slot.
@@ -255,6 +251,10 @@ startup
 		;; any command for a while.
 gc_controller_id_check
 		call	gamecube_get_id
+		clrf	n64_status_buffer+0	; Start out with everything zeroed...
+		clrf	n64_status_buffer+1
+		clrf	n64_status_buffer+2
+		clrf	n64_status_buffer+3
 		call	n64_wait_for_command
 
 		;; If the controller is a Wavebird we need to do some special initialization process first.
@@ -1104,6 +1104,9 @@ gamecube_get_id
 	btfss	gamecube_buffer+0, 7	; Check only the MSB of the first byte since it's enough
 	return							; to tell between normal controller and Wavebird.
 	
+	movlw	0x02					; Wavebird don't have rumble motor so we show to the n64
+	movwf	controller_id			; that we are a controller with empty slot.
+	
 	bsf		WAVEBIRD				; We have a Wavebird receiver connected and we check if
 	movf	gamecube_buffer, w		; a Wavebird is associated with it.
 	xorlw	0xA8
@@ -1142,6 +1145,10 @@ gamecube_init_wavebird
 	movlw	3
 	call	gamecube_rx
 	
+	clrf	n64_status_buffer+0	; Start out with everything zeroed...
+	clrf	n64_status_buffer+1
+	clrf	n64_status_buffer+2
+	clrf	n64_status_buffer+3
 	call	n64_wait_for_command	; We have gamecube controller calibration ahead and the controller
 									; won't be ready to answer. So we do n64 commands meantime.
 	
