@@ -175,6 +175,7 @@ io_init		macro
 			gc_value_x8:2
 			gc_value_x16:2
 			counter
+			wavebird_id:2
 		endc
 	endif
 
@@ -192,7 +193,10 @@ io_init		macro
 	#define	FLAG_REMAP_DEST_WAIT		flags, 4
 
 	;; Is the GC controller a Wavebird?
-	#define	WAVEBIRD					flags, 5			
+	#define	WAVEBIRD					flags, 5
+	
+	;; Wavebird association state.
+	#define WAVEBIRD_ASSOCIATED			flags, 6
 	
 	
 	;; *******************************************************************************
@@ -245,18 +249,28 @@ startup
 		;; To detect if the GC controller is a Wavebird, we send a identify command (0x00)
 		;; to the controller. We then follow with n64 task since the controller won't be reponding 
 		;; any command for a while.
+gc_controller_id_check
 		call	gamecube_get_id
 		call	n64_wait_for_command
 
-		;; If the controller is a Wavebird we need to send a magic command (0x4ED0C0) to enable it.
-		btfsc	WAVEBIRD
+		;; If the controller is a Wavebird we need to do some special initialization process first.
+		;; else we have a standard controller and we are ready to poll status.
+		btfss	WAVEBIRD
+		goto	gc_controller_ready
+		
+		;; If we have an Wavebird associated with the receiver we are ready to init it.
+		;; else we go back ready the controller id.
+		btfss	WAVEBIRD_ASSOCIATED
+		goto	gc_controller_id_check
+		
 		call	gamecube_init_wavebird
-	
+		
 	endif
 
 	;; Calibrate the controller now since before that the Wavebird would not have repond to poll status.
 	;; Note that we have to continue on with n64_translate_status and n64_wait_for_command
 	;; because the gamecube controller won't be ready for another poll immediately.
+gc_controller_ready
 	call	gamecube_poll_status
 	call	gamecube_reset_calibration
 	call	n64_translate_status
@@ -406,7 +420,7 @@ next
 	;; Map an 8-bit 0x80-centered axis to an 8-bit signed axis.
 	;; Doesn't allow any remapping.
 map_axis macro src_byte, dest_byte
-	ifdef __12F683
+	ifdef __12F683_disable
 		movlw	0x18
 		subwf	gamecube_buffer+src_byte, w
 		call	gc_axis_to_n64_range
@@ -1083,21 +1097,35 @@ gamecube_get_id
 	movlw	3
 	call	gamecube_rx
 	
-	btfsc	gamecube_buffer+0, 7	; Check only the MSB of the first byte since it's enough
-	bsf		WAVEBIRD				; to tell between normal controller and Wavebird.
+	btfss	gamecube_buffer+0, 7	; Check only the MSB of the first byte since it's enough
+	return							; to tell between normal controller and Wavebird.
+	
+	bsf		WAVEBIRD				; We have a Wavebird receiver connected and we check if
+	movf	gamecube_buffer, w		; a Wavebird is associated with it.
+	xorlw	0xA8
+	btfsc	STATUS, Z
+	return
+	
+	bsf		WAVEBIRD_ASSOCIATED		; Wavebird is associated and we save his unique id
+	movf	gamecube_buffer+1, w	; to be able to init it next time.
+	movwf	wavebird_id+0
+	movf	gamecube_buffer+2, w
+	movwf	wavebird_id+1
 	
 	return
 	
-	;; If we receive 0xEBF0C0 (Wavebird ID) we must repond with the magic word
-	;; command 0x4ED0C0 to enable the WaveBird. It will not answer the poll status otherwise.
-	;; Sending this command to a normal controller will disable it until next power cycle!!
-	;; So we must only send this when a Wavebird is connected.
+	;; If we receive something other than 0xA8xxxx as ID we must repond with the Wavebird unique ID
+	;; at the end of command 0x4Exxxx to enable the WaveBird. It will not answer the poll status otherwise.
 gamecube_init_wavebird
-	movlw	0x4E			; Put 0x4ED0C0 in the gamecube_buffer to enable Wavebird.
+	movlw	0x4E			; Put 0x4Exxxx in the gamecube_buffer to enable Wavebird.
 	movwf	gamecube_buffer+0
-	movlw	0xD0
+	
+	movf	wavebird_id+0, w		; Unique id first byte.
 	movwf	gamecube_buffer+1
-	movlw	0xC0
+	bcf		gamecube_buffer+1, 5	; Bit 5 and 4 are always 0 & 1 respectively in an 0x4E init command.
+	bsf		gamecube_buffer+1, 4
+	
+	movf	wavebird_id+1, w		; Unique id second byte.
 	movwf	gamecube_buffer+2
 
 	movlw	gamecube_buffer		; Transmit the gamecube_buffer
@@ -1129,7 +1157,7 @@ gamecube_poll_status
 	movwf	gamecube_buffer+2
 
 	btfsc	FLAG_RUMBLE_MOTOR_ON	; Set the low bit of our gamecube command to turn on rumble
-	bsf	gamecube_buffer+2, 0
+	bsf		gamecube_buffer+2, 0
 
 	movlw	gamecube_buffer		; Transmit the gamecube_buffer
 	movwf	FSR
