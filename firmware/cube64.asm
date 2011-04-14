@@ -421,8 +421,8 @@ next
 	;; Map an 8-bit 0x80-centered axis to an 8-bit signed axis.
 	;; Doesn't allow any remapping.
 map_axis macro src_byte, dest_byte
-	ifdef __12F683_disable
-		movlw	0x18
+	ifdef __12F683
+		movlw	0x80
 		subwf	gamecube_buffer+src_byte, w
 		call	gc_axis_to_n64_range
 	else
@@ -466,6 +466,9 @@ gc_axis_to_n64_range
 	clrf	gc_value_x16+1
 	
 	movwf	gc_value_x16		; Save gc value.
+	
+	btfsc	gc_value_x16, 7		; Extend sign if number negative.
+	comf	gc_value_x16+1, f
 	
 	bcf 	STATUS, C			; Bit shifft left to multiply by 2.
 	rlf		gc_value_x16, f
@@ -511,6 +514,10 @@ gc_axis_to_n64_range
 	
 divide_32						; Divide gc_value by 32.
 	bcf		STATUS, C
+	
+	btfsc	gc_value_x2+1, 7	; Put sign into Carry if number negative.
+	bsf		STATUS, C
+	
 	rrf		gc_value_x2+1, f
 	rrf		gc_value_x2, f
 	incf	counter, f
@@ -519,8 +526,8 @@ divide_32						; Divide gc_value by 32.
 	btfss	STATUS, Z
 	goto	divide_32
 	
-	movlw	0x54				; Transform the value into two's complement.
-	subwf	gc_value_x2, w
+	movf	gc_value_x2, w
+	
 	return
 	
 	endif
