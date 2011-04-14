@@ -447,13 +447,12 @@ map_button_axis macro axis_byte, lower_virtual, upper_virtual, lower_thresh, upp
 	call	remap_virtual_button			; C=1, B=0, (upper_thresh+1) <= axis
 	endm
 	
-	;; GameCube axis value range between ~[24, 232] so an approximate resolution of 208.
-	;; N64 axis value range between ~[-84, 84] so an approximate resolution of 168.
+	;; GameCube axis value range between ~[0x1C, 0xE5] so an approximate resolution of ~200.
+	;; N64 axis value range between ~[-0x54, 0x54] so an approximate resolution of 168.
 	;; Most N64 game will accept a direct mapping of the gamecube value. This will either
-	;; change nothing or add an added precision/sensibility. However some games don't expect value over
-	;; 84 and get confused like Blast Corps. This function adapt the GameCube input into
-	;; the usual N64 value range by doing the following operation:
-	;;					((GC_Value-24)*26/32)-84
+	;; change nothing or add an added precision/sensibility. Direct mapping can make some
+	;; game to feel to much sensitive. This function adapt the GameCube input into
+	;; the usual N64 value range by doing the following operation: ((GC_Value-0x80)*26/32).
 	
 	ifdef __12F683
 	
@@ -467,7 +466,7 @@ gc_axis_to_n64_range
 	
 	movwf	gc_value_x16		; Save gc value.
 	
-	btfsc	gc_value_x16, 7		; Extend sign if number negative.
+	btfsc	gc_value_x16, 7		; Extend sign if number is negative.
 	comf	gc_value_x16+1, f
 	
 	bcf 	STATUS, C			; Bit shifft left to multiply by 2.
@@ -688,11 +687,12 @@ pressed_remap_combo
 	goto	start_rumble_feedback
 
 
-	;; The reset combo was pressed. Reset the EEPROM contents, and use the
-	;; rumble motor for feedback if possible.
+	;; The reset combo was pressed. Reset the EEPROM contents of the current active button
+	;; layout, and use the rumble motor for feedback if possible.
 pressed_reset_combo
 	bsf	FLAG_WAITING_FOR_RELEASE
-	call	reset_eeprom
+	call	reset_active_eeprom_layout
+	bcf	STATUS, RP0
 	goto	start_rumble_feedback
 	
 	;; The controller id change combo was pressed. Toggle the controller id between 0x01 and 0x02.
@@ -802,15 +802,7 @@ reset_eeprom
 	clrf	EEADR			; Loop over all virtual buttons, writing the identity mapping
 next_eeprom_bank
 	clrf	EEDATA
-eeprom_reset_loop
-	call	eewrite
-	banksel	EEADR
-	incf	EEADR, f
-	incf	EEDATA, f
-	movf	EEDATA, w
-	xorlw	NUM_VIRTUAL_BUTTONS
-	btfss	STATUS, Z
-	goto	eeprom_reset_loop
+	call	reset_next_byte
 	movf	EEADR, w
 	xorlw	NUM_EEPROM_DATA
 	btfss	STATUS, Z
@@ -840,7 +832,31 @@ eeprom_reset_loop
 	goto	eewrite
 
 
-	;; read from address 'w' of the eeprom, return in 'w'.
+	;; Reset only data relative to the current active button mapping layout.
+reset_active_eeprom_layout
+	ifdef __12F683
+		movf	active_key_map, w
+		banksel	EEADR
+		movwf	EEADR
+	else
+		banksel	EEADR
+		clrf	EEADR
+	endif
+	clrf	EEDATA
+	
+	;; Reset to default all button beginning at the current address set.
+reset_next_byte
+	call	eewrite
+	banksel	EEADR
+	incf	EEADR, f
+	incf	EEDATA, f
+	movf	EEDATA, w
+	xorlw	NUM_VIRTUAL_BUTTONS
+	btfss	STATUS, Z
+	goto	reset_next_byte
+	return
+
+	;; Read from address 'w' of the eeprom, return in 'w'.
 	;; Note that we must use banksel here rather than setting the page
 	;; bits manually, since the PIC16F84A and PIC12F629 keep the EEPROM
 	;; registers in different memory banks.
