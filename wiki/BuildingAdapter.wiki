@@ -5,7 +5,7 @@
 
 _This tutorial show an easy way to build the adapter. This is targeted to beginner. This is often how I build my prototype since it's fast to do and avoid wasting PCB and component. More experienced people would prefer going the SMD way with a little PCB so it look better._
 
-_Also I'm voluntary not showing how to add the MAX682 since it's a SMD only chip. Not for beginner at all. What you could do is using a USB cable plugin in one of your nearby newer console to provide +5v to the adapter._
+_Also I'm voluntary not showing how to add the MAX682 since it's a SMD only chip. Not for beginner at all. What you could do is using a USB cable plug into one of your nearby newer console to provide +5v to the adapter._
 <br><br><br>
 ==Stuff needed==
 
