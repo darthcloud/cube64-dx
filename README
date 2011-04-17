@@ -68,7 +68,7 @@ gameplay. To change the mapping for one button:
      a brief rumble.
 
 	 
-To reset all mappings to the above defaults:
+To reset all mappings of the current active button layout to the above defaults:
 
   1. Hold down the L and R buttons down most of the way, but not enough to
      push the end-stop buttons, and press Z.
@@ -128,23 +128,30 @@ joystick, C-stick, L button, or R button:
 Hardware
 --------
 
-There are currently two versions of the Cube64 hardware:
+There are currently three versions of the Cube64 hardware:
 
   - The "Cube64 Basic" uses a very common PIC16F84A microcontroller, and
     requires an external 5V power supply. Just about any electronics hobbyist
-    should be able to build it easily. 
+    should be able to build it easily. (Deprecated)
 
   - The "Cube64 Mini" uses a tiny 8-pin PIC12F629 microcontroller, and
     includes a charge pump that generates the 5V supply for the rumble motor.
     It is smaller and more convenient than the Cube64 Basic, but it requires
     a less common microcontroller and a charge pump that's only available
-    in surface mount packages.
+    in surface mount packages. (Deprecated)
+	
+  - The "Cube64-DX" uses the PIC12F683 microcontroller. It use exacly the same
+    circuit as the Cube64 Mini. It's the only version who get new feature
+	since it have more flash memory to hold the additional code needed.
 
-Both versions of the hardware have the same button remapping features
+Both older versions of the hardware have the same button remapping features
 and responsiveness, as the only difference in their firmware is a few lines
 worth of compile-time configuration. You can also of course use the charge
 pump circuit from the Cube64 Mini with a PIC16F84A- but if you're using
 tiny chips anyway, might as well go all the way ;)
+
+The PIC12F683 version include all new feature like multi button mapping layout,
+Wavebird support and a more accurate joystick value range.
 
 
 Status
