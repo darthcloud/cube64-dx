@@ -27,7 +27,7 @@ _Don't be cheap! The key to easily build electronic stuff is to have the right t
 ===Required Component===
 
   * 1 x PIC12F683 (See how to [http://code.google.com/p/cube64-dx/wiki/FlashingFirmware flash the firmware])
-  * 1 x GameCube controller socket (From extension cable?)
+  * 1 x !GameCube controller socket (From extension cable?)
   * 1 x N64 controller plug (From controller or extension cable?)
   * 1 x 0.1µF Capacitor
   * 2 x 15pF Capacitors
@@ -65,11 +65,11 @@ _Don't be cheap! The key to easily build electronic stuff is to have the right t
   # Connect together pins 13 and 20 with small wire.
    * [http://cube64-dx.googlecode.com/svn/wiki/img/10p_P4020011.jpg]
   # Cut your N64 plug from whatever you are taking it from. With the stripper use the 20AWG hole (Biggest) to remove at least 3cm of the external insulator. Then using the 30AWG hole strip 2mm of each cable insulator. Apply solder to the end of each wires.
-  # Repeat previous step for the GameCube socket.
+  # Repeat previous step for the !GameCube socket.
   # Using a multimeter and the adapter schematic, identify each cable. *Do not trust the color of the following screenshot*. Each cable brand have different color coding.
   # Connect the N64 plug to the socket. GND cable go on pin 20, +3.3v one on pin 1 and Data cable on pin 18.
    * [http://cube64-dx.googlecode.com/svn/wiki/img/10p_P4020012.jpg]
-  # Connect the GameCube socket to the DIP socket. Data go on pin 11, +3.3v on pin 10 and GNDs cable on pin 13. _You can optionally connect the +5v cable of the rumble motor to a little connector so you can use an external +5v source._
+  # Connect the !GameCube socket to the DIP socket. Data go on pin 11, +3.3v on pin 10 and GNDs cable on pin 13. _You can optionally connect the +5v cable of the rumble motor to a little connector so you can use an external +5v source._
    * [http://cube64-dx.googlecode.com/svn/wiki/img/10p_P4020013.jpg]
   # Now you are ready to insert component!
    * [http://cube64-dx.googlecode.com/svn/wiki/img/10p_P4020014.jpg]
