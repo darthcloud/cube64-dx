@@ -122,10 +122,15 @@ io_init		macro
 	;; EEPROM or one with different data in it, we reinitialize it.
 	;; Change this value if the EEPROM data format changes.
 	;;
-	#define	EEPROM_MAGIC_WORD	0xEC70
-	#define EEPROM_MAGIC_ADDR	0x40
-	#define EEPROM_LAST_KEY_MAP	0x50
-
+	
+	ifdef __12F683
+		#define	EEPROM_MAGIC_WORD	0xEC70
+		#define EEPROM_MAGIC_ADDR	0x40
+		#define EEPROM_LAST_KEY_MAP	0x50
+	else
+		#define	EEPROM_MAGIC_WORD	0xEF71
+		#define EEPROM_MAGIC_ADDR	0x20
+	endif
 
 	;; Reset and interrupt vectors
 	org 0
@@ -803,10 +808,13 @@ reset_eeprom
 next_eeprom_bank
 	clrf	EEDATA
 	call	reset_next_byte
-	movf	EEADR, w
-	xorlw	NUM_EEPROM_DATA
-	btfss	STATUS, Z
-	goto	next_eeprom_bank
+	
+	ifdef __12F683
+		movf	EEADR, w
+		xorlw	NUM_EEPROM_DATA
+		btfss	STATUS, Z
+		goto	next_eeprom_bank
+	endif
 	
 	movlw	EEPROM_MAGIC_ADDR	; Write the magic word
 	banksel	EEADR
