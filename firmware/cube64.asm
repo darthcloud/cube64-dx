@@ -8,8 +8,8 @@
 	;;   the Free Software Foundation; either version 2 of the License, or
 	;;   (at your option) any later version.
 	;;
-	;; This firmware is designed to run on a PIC16F84A, PIC12F629 or PIC12F683
-	;; microcontroller clocked at 20 MHz.
+	;; This firmware is designed to run on a PIC12F683 microcontroller
+	;; clocked at 20 MHz.
 	;;
 	;; See n64gc_comm.inc for code and documentation related to the protocol
 	;; used between here, the N64, and the Gamecube.
@@ -25,63 +25,7 @@
 
 	errorlevel -302
 
-	;; Definitions for the PIC16F84A version
-	ifdef __16F84A
-		#include p16f84a.inc
-
-		__CONFIG   _CP_OFF & _PWRTE_OFF & _WDT_ON & _HS_OSC
-
-		#define N64_PIN		PORTB, 0
-		#define N64_TRIS	TRISB, 0
-		#define	GAMECUBE_PIN	PORTB, 1
-		#define	GAMECUBE_TRIS	TRISB, 1
-
-		#define RAM_START	0x0C
-
-io_init		macro
-		bcf	STATUS, RP0
-		clrf	PORTA
-		clrf	PORTB
-		bsf	STATUS, RP0
-		clrf	TRISA
-		movlw	0x03
-		movwf	TRISB
-		bcf	STATUS, RP0
-		endm
-
-	;; Definitions for the PIC12F629 version
-	else
-	ifdef  __12F629
-	  	#include p12f629.inc
-
-		__CONFIG  0x31FF &  _CPD_OFF & _CP_OFF & _BODEN_OFF & _MCLRE_OFF & _PWRTE_OFF & _WDT_ON & _HS_OSC
-
-		#define N64_PIN		GPIO, 0
-		#define N64_TRIS	TRISIO, 0
-		#define	GAMECUBE_PIN	GPIO, 1
-		#define	GAMECUBE_TRIS	TRISIO, 1
-
-		#define RAM_START	0x20
-
-		;; For compatibility with the PIC12F675, disable analog pins
-		#define	ANSEL		0x9F
-
-io_init		macro
-		bcf	STATUS, RP0		; Clear output latches
-		clrf	GPIO
-		movlw	0x0F		; Disable the comparator
-		movwf	CMCON
-		bsf	STATUS, RP0
-		movlw	0x03		; The two controller pins begin as inputs
-		movwf	TRISIO
-		errorlevel	-219	; Disable the A/D converter (on the '675)
-		clrf	ANSEL
-		errorlevel	+219
-		bcf	STATUS, RP0
-		endm
-		
 	;; Definitions for the PIC12F683 version
-	else
 	ifdef  __12F683
 	  	#include p12f683.inc
 
@@ -109,8 +53,6 @@ io_init		macro
 	else
 		messg	"Unsupported processor"
 	endif
-	endif
-	endif
 
 	#include n64gc_comm.inc
 
@@ -123,14 +65,11 @@ io_init		macro
 	;; Change this value if the EEPROM data format changes.
 	;;
 	
-	ifdef __12F683
-		#define	EEPROM_MAGIC_WORD	0xEC70
-		#define EEPROM_MAGIC_ADDR	0x40
-		#define EEPROM_LAST_KEY_MAP	0x50
-	else
-		#define	EEPROM_MAGIC_WORD	0xEF71
-		#define EEPROM_MAGIC_ADDR	0x20
-	endif
+
+	#define	EEPROM_MAGIC_WORD	0xEC70
+	#define EEPROM_MAGIC_ADDR	0x40
+	#define EEPROM_LAST_KEY_MAP	0x50
+
 
 	;; Reset and interrupt vectors
 	org 0
@@ -171,18 +110,14 @@ io_init		macro
 		n64_id_buffer:0		; 3 bytes, overlaid with gamecube_buffer
 		gamecube_buffer:8
 		n64_status_buffer:4
+		
+		active_key_map
+		gc_value_x1:2
+		gc_value_x8:2
+		gc_value_x15:2
+		counter
+		wavebird_id:2
 	endc
-	
-	ifdef __12F683
-		cblock	0x60
-			active_key_map
-			gc_value_x2:2
-			gc_value_x8:2
-			gc_value_x16:2
-			counter
-			wavebird_id:2
-		endc
-	endif
 
 	;; The rumble motor should be on
 	#define	FLAG_RUMBLE_MOTOR_ON		flags, 0
@@ -215,10 +150,7 @@ startup
 	clrf	flags
 	clrf	calibration_count
 	clrf	rumble_feedback_count
-	
-	ifdef __12F683
-		clrf	active_key_map
-	endif
+	clrf	active_key_map
 	
 	;;Set controller id to occupied slot.
 	movlw	0x01
@@ -248,31 +180,28 @@ startup
 	;; Check our EEPROM for validity, and reset it if it's blank or corrupted
 	call	validate_eeprom
 
-	;; Wavebird support only for 12f683, not enough flash in other PICs.
-	ifdef __12F683
 	
-		;; To detect if the GC controller is a Wavebird, we send a identify command (0x00)
-		;; to the controller. We then follow with n64 task since the controller won't be reponding 
-		;; any command for a while.
+	;; To detect if the GC controller is a Wavebird, we send a identify command (0x00)
+	;; to the controller. We then follow with n64 task since the controller won't be reponding 
+	;; any command for a while.
 gc_controller_id_check
-		call	gamecube_get_id
-		call	n64_wfc_empty_buffer
+	call	gamecube_get_id
+	call	n64_wfc_empty_buffer
 
-		;; If the controller is a Wavebird we need to do some special initialization process first.
-		;; else we have a standard controller and we are ready to poll status.
-		btfss	WAVEBIRD
-		goto	gc_controller_ready
-		
-		;; If we have an Wavebird associated with the receiver we are ready to init it.
-		;; else we go back reading the controller id.
-		btfss	WAVEBIRD_ASSOCIATED
-		goto	gc_controller_id_check
-		
-		call	gamecube_init_wavebird
-		call	n64_wfc_empty_buffer
-		
-	endif
+	;; If the controller is a Wavebird we need to do some special initialization process first.
+	;; else we have a standard controller and we are ready to poll status.
+	btfss	WAVEBIRD
+	goto	gc_controller_ready
+	
+	;; If we have an Wavebird associated with the receiver we are ready to init it.
+	;; else we go back reading the controller id.
+	btfss	WAVEBIRD_ASSOCIATED
+	goto	gc_controller_id_check
+	
+	call	gamecube_init_wavebird
+	call	n64_wfc_empty_buffer
 
+	
 	;; Calibrate the controller now since before that the Wavebird would not have repond to poll status.
 	;; Note that we have to continue on with n64_translate_status and n64_wait_for_command
 	;; because the gamecube controller won't be ready for another poll immediately.
@@ -282,6 +211,7 @@ gc_controller_ready
 	call	n64_translate_status
 	call	n64_wait_for_command
 
+	
 main_loop
 	call	update_rumble_feedback	; Give feedback for remapping operations using the rumble motor
 	call	gamecube_poll_status	; The gamecube poll takes place during the dead period
@@ -401,6 +331,8 @@ no_calibration_combo
 
 	#define	NUM_VIRTUAL_BUTTONS	0x10
 	#define NUM_EEPROM_DATA		0x40
+	
+	#define AXIS_DEAD_ZONE		0x0A
 
 
 	;; Map a gamecube button to a virtual button, and eventually to an N64 button
@@ -426,14 +358,31 @@ next
 	;; Map an 8-bit 0x80-centered axis to an 8-bit signed axis.
 	;; Doesn't allow any remapping.
 map_axis macro src_byte, dest_byte
-	ifdef __12F683
-		movlw	0x80
-		subwf	gamecube_buffer+src_byte, w
-		call	gc_axis_to_n64_range
-	else
-		movlw	0x80
-		subwf	gamecube_buffer+src_byte, w
-	endif
+	local	negative_axis_value
+	local	load_gc_buffer_to_n64
+	
+	movlw	0x80							; Sign GC axis value.
+	subwf	gamecube_buffer+src_byte, f
+	
+	movlw	AXIS_DEAD_ZONE
+	
+	btfsc	gamecube_buffer+src_byte, 7		; Check value sign.
+	goto	negative_axis_value
+	
+	;; Current value is positive.
+	subwf	gamecube_buffer+src_byte, f
+	btfsc	gamecube_buffer+src_byte, 7
+	clrf	gamecube_buffer+src_byte
+	goto	load_gc_buffer_to_n64
+	
+	;; Current value is negative.
+negative_axis_value
+	addwf	gamecube_buffer+src_byte, f
+	btfss	gamecube_buffer+src_byte, 7
+	clrf	gamecube_buffer+src_byte
+
+load_gc_buffer_to_n64
+	movf	gamecube_buffer+src_byte, w
 	movwf	n64_status_buffer+dest_byte
 	endm
 
@@ -451,90 +400,6 @@ map_button_axis macro axis_byte, lower_virtual, upper_virtual, lower_thresh, upp
 	btfsc	STATUS, C
 	call	remap_virtual_button			; C=1, B=0, (upper_thresh+1) <= axis
 	endm
-	
-	;; GameCube axis value range between ~[0x1C, 0xE5] so an approximate resolution of ~200.
-	;; N64 axis value range between ~[-0x54, 0x54] so an approximate resolution of 168.
-	;; Most N64 game will accept a direct mapping of the gamecube value. This will either
-	;; change nothing or add an added precision/sensibility. Direct mapping can make some
-	;; game to feel to much sensitive. This function adapt the GameCube input into
-	;; the usual N64 value range by doing the following operation: ((GC_Value-0x80)*26/32).
-	
-	ifdef __12F683
-	
-gc_axis_to_n64_range
-	clrf	gc_value_x2			; Clear register.
-	clrf	gc_value_x2+1
-	clrf	gc_value_x8
-	clrf	gc_value_x8+1
-	clrf	gc_value_x16
-	clrf	gc_value_x16+1
-	
-	movwf	gc_value_x16		; Save gc value.
-	
-	btfsc	gc_value_x16, 7		; Extend sign if number is negative.
-	comf	gc_value_x16+1, f
-	
-	bcf 	STATUS, C			; Bit shifft left to multiply by 2.
-	rlf		gc_value_x16, f
-	rlf		gc_value_x16+1, f
-	
-	movf	gc_value_x16, w		; Save this result.
-	movwf	gc_value_x2
-	movf	gc_value_x16+1, w
-	movwf	gc_value_x2+1
-	
-	bcf 	STATUS, C			; 2 other bit shift left to multiply by 8 in total.
-	rlf		gc_value_x16, f
-	rlf		gc_value_x16+1, f
-	
-	bcf 	STATUS, C
-	rlf		gc_value_x16, f
-	rlf		gc_value_x16+1, f
-	
-	movf	gc_value_x16, w		; Save this result.
-	movwf	gc_value_x8
-	movf	gc_value_x16+1, w
-	movwf	gc_value_x8+1
-	
-	bcf 	STATUS, C			; Bit shift left again to multiply by 16 in total.
-	rlf		gc_value_x16, f
-	rlf		gc_value_x16+1, f
-	
-	movf	gc_value_x16, w		; Add gc_value_x16 to gc_value_x2.
-	addwf	gc_value_x2, f
-	movf	gc_value_x16+1, w
-	btfsc	STATUS, C
-	incf	gc_value_x16+1, w
-	addwf	gc_value_x2+1, f
-	
-	movf	gc_value_x8, w		; Add gc_value_x8 to gc_value_x2.
-	addwf	gc_value_x2, f
-	movf	gc_value_x8+1, w
-	btfsc	STATUS, C
-	incf	gc_value_x8+1, w
-	addwf	gc_value_x2+1, f
-	
-	clrf	counter				; Clear counter.
-	
-divide_32						; Divide gc_value by 32.
-	bcf		STATUS, C
-	
-	btfsc	gc_value_x2+1, 7	; Put sign into Carry if number negative.
-	bsf		STATUS, C
-	
-	rrf		gc_value_x2+1, f
-	rrf		gc_value_x2, f
-	incf	counter, f
-	movf	counter, w
-	xorlw	0x05
-	btfss	STATUS, Z
-	goto	divide_32
-	
-	movf	gc_value_x2, w
-	
-	return
-	
-	endif
 
 
 	;; Copy status from the gamecube buffer to the N64 buffer. This first
@@ -667,18 +532,14 @@ check_remap_combo
 	goto	pressed_reset_combo
 	btfsc	gamecube_buffer + GC_X
 	goto	pressed_cont_id_combo
-	
-	ifdef __12F683
-		btfsc	gamecube_buffer + GC_D_UP
-		goto	pressed_preset_up
-		btfsc	gamecube_buffer + GC_D_LEFT
-		goto	pressed_preset_left
-		btfsc	gamecube_buffer + GC_D_RIGHT
-		goto	pressed_preset_right
-		btfsc	gamecube_buffer + GC_D_DOWN
-		goto	pressed_preset_down
-	endif
-	
+	btfsc	gamecube_buffer + GC_D_UP
+	goto	pressed_preset_up
+	btfsc	gamecube_buffer + GC_D_LEFT
+	goto	pressed_preset_left
+	btfsc	gamecube_buffer + GC_D_RIGHT
+	goto	pressed_preset_right
+	btfsc	gamecube_buffer + GC_D_DOWN
+	goto	pressed_preset_down
 	return
 
 
@@ -708,9 +569,7 @@ pressed_cont_id_combo
 	movwf	controller_id
 	goto	start_rumble_feedback
 	
-	ifdef __12F683
-	
-	;; Load custom layout up.
+	;; Load custom up.
 pressed_preset_up
 	bsf	FLAG_WAITING_FOR_RELEASE
 	movlw	0x00
@@ -746,10 +605,8 @@ save_active_key_layout
 	banksel EEADR
 	movwf	EEADR
 	call	eewrite
-	
 	goto	start_rumble_feedback
-	
-	endif
+
 	
 	;; Accept the virtual button code for the remap source in 'w', and prepare
 	;; to accept the remap destination.
@@ -767,10 +624,8 @@ accept_remap_dest
 	banksel	EEDATA
 	movwf	EEDATA		; Destination button is data, source is address.
 	bcf	STATUS, RP0		; No mirror of GPR in Bank 1 for 12F683 need to switch to Bank 0 for variables access.
-	movf	remap_source_button, w
-	ifdef __12F683					; Add offset to eeprom address to read the right custom buttons layout.
-		addwf	active_key_map, w
-	endif
+	movf	remap_source_button, w		
+	addwf	active_key_map, w	; Add offset to eeprom address to read the right custom buttons layout.
 	banksel EEADR
 	movwf	EEADR
 	call	eewrite
@@ -793,11 +648,9 @@ validate_eeprom
 	btfss	STATUS, Z
 	goto	reset_eeprom
 	
-	ifdef __12F683
-		movlw	EEPROM_LAST_KEY_MAP	; Load last used custom layout.
-		call	eeread
-		movwf	active_key_map
-	endif
+	movlw	EEPROM_LAST_KEY_MAP	; Load last used custom layout.
+	call	eeread
+	movwf	active_key_map
 	return
 
 
@@ -808,13 +661,10 @@ reset_eeprom
 next_eeprom_bank
 	clrf	EEDATA
 	call	reset_next_byte
-	
-	ifdef __12F683
-		movf	EEADR, w
-		xorlw	NUM_EEPROM_DATA
-		btfss	STATUS, Z
-		goto	next_eeprom_bank
-	endif
+	movf	EEADR, w
+	xorlw	NUM_EEPROM_DATA
+	btfss	STATUS, Z
+	goto	next_eeprom_bank
 	
 	movlw	EEPROM_MAGIC_ADDR	; Write the magic word
 	banksel	EEADR
@@ -826,30 +676,22 @@ next_eeprom_bank
 	banksel	EEADR
 	movwf	EEADR
 	movlw	EEPROM_MAGIC_WORD & 0xFF
-	movwf	EEDATA
-	
-	ifdef __12F683		;; Init default layout in eeprom.
-		call	eewrite
+	movwf	EEDATA	
+	call	eewrite
 		
-		movlw	EEPROM_LAST_KEY_MAP
-		banksel	EEADR
-		movwf	EEADR
-		movlw	0x00
-		movwf	EEDATA
-	endif
+	movlw	EEPROM_LAST_KEY_MAP		;; Init default layout in eeprom.
+	banksel	EEADR
+	movwf	EEADR
+	movlw	0x00
+	movwf	EEDATA
 	goto	eewrite
 
 
 	;; Reset only data relative to the current active button mapping layout.
 reset_active_eeprom_layout
-	ifdef __12F683
-		movf	active_key_map, w
-		banksel	EEADR
-		movwf	EEADR
-	else
-		banksel	EEADR
-		clrf	EEADR
-	endif
+	movf	active_key_map, w
+	banksel	EEADR
+	movwf	EEADR
 	clrf	EEDATA
 	
 	;; Reset to default all button beginning at the current address set.
@@ -869,9 +711,7 @@ reset_next_byte
 	;; bits manually, since the PIC16F84A and PIC12F629 keep the EEPROM
 	;; registers in different memory banks.
 eeread
-	ifdef __12F683
-		addwf	active_key_map, w	; Add offset to read in right buttons layout.
-	endif
+	addwf	active_key_map, w	; Add offset to read in right buttons layout.
 	banksel	EEADR
 	movwf	EEADR
 	banksel	EECON1
@@ -1118,9 +958,6 @@ n64_rx_command
 	;; *******************************************************************************
 	;; ******************************************************  Gamecube Interface  ***
 	;; *******************************************************************************
-
-	;; Wavebird support only on 12f683.
-	ifdef __12F683
 	
 	;; To support the Wavebird we must poll the controller identity first.
 gamecube_get_id
@@ -1183,8 +1020,6 @@ gamecube_init_wavebird
 	
 	return
 	
-	endif
-	
 	
 	;; Poll the gamecube controller's state by transmitting a magical
 	;; poll command (0x400300) then receiving 8 bytes of status.
@@ -1239,11 +1074,8 @@ get_repeated_crc
 	movf	n64_bus_packet, w
 	movwf	PCL
 
-	ifdef __12F683
+
 	org 0x700
-	else
-	org 0x300
-	endif
 	
 crc_table
 	#include repeated_crc_table.inc
