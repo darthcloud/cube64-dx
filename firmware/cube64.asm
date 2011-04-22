@@ -107,7 +107,7 @@ io_init		macro
 		n64_bus_packet:.32
 		n64_crc
 
-		n64_id_buffer:0		; 3 bytes, overlaid with gamecube_buffer
+		n64_id_buffer:3
 		gamecube_buffer:8
 		n64_status_buffer:4
 		
@@ -116,7 +116,6 @@ io_init		macro
 		gc_value_x8:2
 		gc_value_x15:2
 		counter
-		wavebird_id:2
 	endc
 
 	;; The rumble motor should be on
@@ -987,11 +986,6 @@ gamecube_get_id
 	return
 	
 	bsf		WAVEBIRD_ASSOCIATED		; Wavebird is associated and we save his unique id
-	movf	gamecube_buffer+1, w	; to be able to init it next time.
-	movwf	wavebird_id+0
-	movf	gamecube_buffer+2, w
-	movwf	wavebird_id+1
-	
 	return
 	
 	;; If we receive something other than 0xA8xxxx as ID we must repond with the Wavebird unique ID
@@ -999,14 +993,9 @@ gamecube_get_id
 gamecube_init_wavebird
 	movlw	0x4E			; Put 0x4Exxxx in the gamecube_buffer to enable Wavebird.
 	movwf	gamecube_buffer+0
-	
-	movf	wavebird_id+0, w		; Unique id first byte.
-	movwf	gamecube_buffer+1
+									; Two other byte containing the WB unique ID allready in buffer.
 	bcf		gamecube_buffer+1, 5	; Bit 5 and 4 are always 0 & 1 respectively in an 0x4E init command.
 	bsf		gamecube_buffer+1, 4
-	
-	movf	wavebird_id+1, w		; Unique id second byte.
-	movwf	gamecube_buffer+2
 
 	movlw	gamecube_buffer		; Transmit the gamecube_buffer
 	movwf	FSR
