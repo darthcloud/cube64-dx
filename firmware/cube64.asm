@@ -77,7 +77,7 @@ io_init		macro
 	org 4
 	retfie
 
-	;; Variables, must be no larger than 64 bytes for the PIC12F629.
+	;; Variables.
 	cblock	RAM_START
 		temp
 		temp2
@@ -110,12 +110,8 @@ io_init		macro
 		n64_id_buffer:3
 		gamecube_buffer:8
 		n64_status_buffer:4
-		
+
 		active_key_map
-		gc_value_x1:2
-		gc_value_x8:2
-		gc_value_x15:2
-		counter
 	endc
 
 	;; The rumble motor should be on
