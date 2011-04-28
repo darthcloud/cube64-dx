@@ -1,4 +1,4 @@
-#summary How to program the .hex file onto the micro-controller.
+#summary How to program the .hex file on the microcontroller.
 #labels Featured
 
 =Programming The PIC=
