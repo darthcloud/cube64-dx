@@ -85,6 +85,7 @@ io_init		macro
 		bit_count
 		bus_byte_count
 		flags
+		config_flags
 		virtual_button
 		calibration_count
 		rumble_feedback_count
@@ -123,15 +124,24 @@ io_init		macro
 	;; Flag for detecting when all buttons are released
 	#define	FLAG_NO_VIRTUAL_BTNS		flags, 2
 
-	;; Set when we're waiting for the source and destination keys, respectively, in a remap combo
-	#define	FLAG_REMAP_SOURCE_WAIT		flags, 3
-	#define	FLAG_REMAP_DEST_WAIT		flags, 4
-
 	;; Is the GC controller a Wavebird?
-	#define	WAVEBIRD					flags, 5
+	#define	WAVEBIRD					flags, 3
 	
 	;; Wavebird association state.
-	#define WAVEBIRD_ASSOCIATED			flags, 6
+	#define WAVEBIRD_ASSOCIATED			flags, 4
+	
+	;; Set when we are waiting for item selection in the top config menu.
+	#define FLAG_TOP_CONFIG_MENU		config_flags, 0
+	
+	;; Set when we are waiting for user input in the adapter mode submenu.
+	#define FLAG_MODE_SUBMENU			config_flags, 1
+	
+	;; Set when we are waiting for user input in the button layout submenu.
+	#define FLAG_LAYOUT_SUBMENU			config_flags, 2
+	
+	;; Set when we're waiting for the source and destination keys, respectively, in a remap combo
+	#define	FLAG_REMAP_SOURCE_WAIT		config_flags, 6
+	#define	FLAG_REMAP_DEST_WAIT		config_flags, 7
 	
 	
 	;; *******************************************************************************
@@ -143,6 +153,7 @@ startup
 
 	n64gc_init
 	clrf	flags
+	clrf	config_flags
 	clrf	calibration_count
 	clrf	rumble_feedback_count
 	clrf	active_key_map
@@ -491,10 +502,16 @@ remap_virtual_button
 	return
 
 	;; Accept buttons presses if we're waiting for one
+	btfsc	FLAG_TOP_CONFIG_MENU
+	goto	accept_config_menu_select
 	btfsc	FLAG_REMAP_SOURCE_WAIT
 	goto	accept_remap_source
 	btfsc	FLAG_REMAP_DEST_WAIT
 	goto	accept_remap_dest
+	btfsc	FLAG_MODE_SUBMENU
+	goto	accept_mode_select
+	btfsc	FLAG_LAYOUT_SUBMENU
+	goto	accept_layout_select
 
 	;; Pass anything else on to the N64, mapped through the EEPROM first
 	call	eeread
@@ -508,7 +525,7 @@ check_remap_combo
 	btfsc	FLAG_WAITING_FOR_RELEASE
 	return
 
-	;; Both our key combinations require that the L and R buttons be mostly pressed.
+	;; Key combinations require that the L and R buttons be mostly pressed.
 	;; but that the end stop buttons aren't pressed.
 	;; Ensure the high bit of each axis is set and that the buttons are cleared.
 	btfss	gamecube_buffer + GC_L_ANALOG, 7
@@ -519,24 +536,21 @@ check_remap_combo
 	return
 	btfsc	gamecube_buffer + GC_R
 	return
-
-	;; Now detect the third key in each combo
+	
+	;; Enter config menu if third key is Start.
 	btfsc	gamecube_buffer + GC_START
-	goto	pressed_remap_combo
-	btfsc	gamecube_buffer + GC_Z
-	goto	pressed_reset_combo
-	btfsc	gamecube_buffer + GC_X
-	goto	pressed_cont_id_combo
-	btfsc	gamecube_buffer + GC_D_UP
-	goto	pressed_preset_up
-	btfsc	gamecube_buffer + GC_D_LEFT
-	goto	pressed_preset_left
-	btfsc	gamecube_buffer + GC_D_RIGHT
-	goto	pressed_preset_right
-	btfsc	gamecube_buffer + GC_D_DOWN
-	goto	pressed_preset_down
+	goto	pressed_config_menu_combo
 	return
 
+
+	;; The config menu button combo was pressed. Give feedback via the rumble motor,
+	;; and await button presses from the user indicating which menu option they want
+	;; access to. Selection is handled into remap_virtual_button since we need virutal
+	;; button codes.
+pressed_config_menu_combo
+	bsf 	FLAG_WAITING_FOR_RELEASE
+	bsf		FLAG_TOP_CONFIG_MENU
+	goto	start_rumble_feedback
 
 	;; The remap button combo was pressed. Give feedback via the rumble motor,
 	;; and await button presses from the user indicating what they want to remap.
@@ -556,14 +570,32 @@ pressed_reset_combo
 	bcf	STATUS, RP0
 	goto	start_rumble_feedback
 	
-	;; The controller id change combo was pressed. Toggle the controller id between 0x01 and 0x02.
-pressed_cont_id_combo
+	;; The adapter mode submenu was selected in the config menu.
+pressed_mode_submenu
 	bsf	FLAG_WAITING_FOR_RELEASE
-	movlw	0x03
-	xorwf	controller_id, w
-	movwf	controller_id
+	bsf	FLAG_MODE_SUBMENU
 	goto	start_rumble_feedback
 	
+	;; The button layout submenu was selected in the config menu.
+pressed_layout_submenu
+	bsf	FLAG_WAITING_FOR_RELEASE
+	bsf	FLAG_LAYOUT_SUBMENU
+	goto	start_rumble_feedback
+	
+	;; Set the adapter mode to empty controller slot.
+pressed_mode_empty
+	bsf	FLAG_WAITING_FOR_RELEASE
+	movlw	0x02
+	movwf	controller_id
+	goto	start_rumble_feedback
+
+	;; Set the adapter mode to rumble pak.
+pressed_mode_rumble
+	bsf	FLAG_WAITING_FOR_RELEASE
+	movlw	0x01
+	movwf	controller_id
+	goto	start_rumble_feedback
+
 	;; Load custom up.
 pressed_preset_up
 	bsf	FLAG_WAITING_FOR_RELEASE
@@ -602,7 +634,21 @@ save_active_key_layout
 	call	eewrite
 	goto	start_rumble_feedback
 
-	
+
+	;; Accept the virtual button pressed for menu selection in 'w', and
+	;; set the right flag for next user input.
+accept_config_menu_select
+	bcf		FLAG_TOP_CONFIG_MENU
+	btfsc	gamecube_buffer + GC_START
+	goto	pressed_remap_combo
+	btfsc	gamecube_buffer + GC_Z
+	goto	pressed_reset_combo
+	btfsc	gamecube_buffer + GC_D_UP
+	goto	pressed_mode_submenu
+	btfsc	gamecube_buffer + GC_D_LEFT
+	goto	pressed_layout_submenu
+	return
+
 	;; Accept the virtual button code for the remap source in 'w', and prepare
 	;; to accept the remap destination.
 accept_remap_source
@@ -629,6 +675,28 @@ accept_remap_dest
 	goto	start_rumble_feedback
 
 
+	;; Accept the adapter mode selection.
+accept_mode_select
+	bcf		FLAG_MODE_SUBMENU
+	btfsc	gamecube_buffer + GC_D_UP
+	goto	pressed_mode_empty
+	btfsc	gamecube_buffer + GC_D_LEFT
+	goto	pressed_mode_rumble
+	return
+	
+	;; Accept the button layout selection.
+accept_layout_select
+	bcf		FLAG_LAYOUT_SUBMENU
+	btfsc	gamecube_buffer + GC_D_UP
+	goto	pressed_preset_up
+	btfsc	gamecube_buffer + GC_D_LEFT
+	goto	pressed_preset_left
+	btfsc	gamecube_buffer + GC_D_RIGHT
+	goto	pressed_preset_right
+	btfsc	gamecube_buffer + GC_D_DOWN
+	goto	pressed_preset_down
+	return
+	
 	;; Check our EEPROM for the magic word identifying it as button mapping data for
 	;; this version of our firmware. If we don't find the magic word, reset its contents.
 validate_eeprom
