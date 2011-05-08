@@ -49,7 +49,7 @@ io_init		macro
 		clrf	ANSEL
 		bcf	STATUS, RP0
 		endm
-	
+
 	else
 		messg	"Unsupported processor"
 	endif
@@ -64,7 +64,7 @@ io_init		macro
 	;; EEPROM or one with different data in it, we reinitialize it.
 	;; Change this value if the EEPROM data format changes.
 	;;
-	
+
 
 	#define	EEPROM_MAGIC_WORD	0xEC70
 	#define EEPROM_MAGIC_ADDR	0x40
@@ -126,24 +126,24 @@ io_init		macro
 
 	;; Is the GC controller a Wavebird?
 	#define	WAVEBIRD					flags, 3
-	
+
 	;; Wavebird association state.
 	#define WAVEBIRD_ASSOCIATED			flags, 4
-	
+
 	;; Set when we are waiting for item selection in the top config menu.
 	#define FLAG_TOP_CONFIG_MENU		config_flags, 0
-	
+
 	;; Set when we are waiting for user input in the adapter mode submenu.
 	#define FLAG_MODE_SUBMENU			config_flags, 1
-	
+
 	;; Set when we are waiting for user input in the button layout submenu.
 	#define FLAG_LAYOUT_SUBMENU			config_flags, 2
-	
+
 	;; Set when we're waiting for the source and destination keys, respectively, in a remap combo
 	#define	FLAG_REMAP_SOURCE_WAIT		config_flags, 6
 	#define	FLAG_REMAP_DEST_WAIT		config_flags, 7
-	
-	
+
+
 	;; *******************************************************************************
 	;; ******************************************************  Initialization  *******
 	;; *******************************************************************************
@@ -157,14 +157,14 @@ startup
 	clrf	calibration_count
 	clrf	rumble_feedback_count
 	clrf	active_key_map
-	
+
 	;;Set controller id to occupied slot.
 	movlw	0x01
 	movwf	controller_id
 
 	movlw	.34			; Reset bus_byte_count to 34. Keeping this set beforehand
 	movwf	bus_byte_count		;   saves a few precious cycles in receiving bus writes.
-	
+
 
 	;; We use the watchdog to implicitly implement controller probing.
 	;; If we have no gamecube controller attached, gamecube_poll_status
@@ -186,9 +186,9 @@ startup
 	;; Check our EEPROM for validity, and reset it if it's blank or corrupted
 	call	validate_eeprom
 
-	
+
 	;; To detect if the GC controller is a Wavebird, we send a identify command (0x00)
-	;; to the controller. We then follow with n64 task since the controller won't be reponding 
+	;; to the controller. We then follow with n64 task since the controller won't be reponding
 	;; any command for a while.
 gc_controller_id_check
 	call	gamecube_get_id
@@ -198,26 +198,28 @@ gc_controller_id_check
 	;; else we have a standard controller and we are ready to poll status.
 	btfss	WAVEBIRD
 	goto	gc_controller_ready
-	
+
 	;; If we have an Wavebird associated with the receiver we are ready to init it.
 	;; else we go back reading the controller id.
 	btfss	WAVEBIRD_ASSOCIATED
 	goto	gc_controller_id_check
-	
+
 	call	gamecube_init_wavebird
 	call	n64_wfc_empty_buffer
 
-	
+
 	;; Calibrate the controller now since before that the Wavebird would not have repond to poll status.
 	;; Note that we have to continue on with n64_translate_status and n64_wait_for_command
 	;; because the gamecube controller won't be ready for another poll immediately.
+	;; We also check the adapter mode select keys to see if user want to change mode on boot.
 gc_controller_ready
 	call	gamecube_poll_status
 	call	gamecube_reset_calibration
+	call	accept_mode_select
 	call	n64_translate_status
 	call	n64_wait_for_command
 
-	
+
 main_loop
 	call	update_rumble_feedback	; Give feedback for remapping operations using the rumble motor
 	call	gamecube_poll_status	; The gamecube poll takes place during the dead period
@@ -337,7 +339,7 @@ no_calibration_combo
 
 	#define	NUM_VIRTUAL_BUTTONS	0x10
 	#define NUM_EEPROM_DATA		0x40
-	
+
 	#define AXIS_DEAD_ZONE		0x0A
 
 
@@ -366,21 +368,21 @@ next
 map_axis macro src_byte, dest_byte
 	local	negative_axis_value
 	local	load_gc_buffer_to_n64
-	
+
 	movlw	0x80							; Sign GC axis value.
 	subwf	gamecube_buffer+src_byte, f
-	
+
 	movlw	AXIS_DEAD_ZONE
-	
+
 	btfsc	gamecube_buffer+src_byte, 7		; Check value sign.
 	goto	negative_axis_value
-	
+
 	;; Current value is positive.
 	subwf	gamecube_buffer+src_byte, f
 	btfsc	gamecube_buffer+src_byte, 7
 	clrf	gamecube_buffer+src_byte
 	goto	load_gc_buffer_to_n64
-	
+
 	;; Current value is negative.
 negative_axis_value
 	addwf	gamecube_buffer+src_byte, f
@@ -536,7 +538,7 @@ check_remap_combo
 	return
 	btfsc	gamecube_buffer + GC_R
 	return
-	
+
 	;; Enter config menu if third key is Start.
 	btfsc	gamecube_buffer + GC_START
 	goto	pressed_config_menu_combo
@@ -569,19 +571,19 @@ pressed_reset_combo
 	call	reset_active_eeprom_layout
 	bcf	STATUS, RP0
 	goto	start_rumble_feedback
-	
+
 	;; The adapter mode submenu was selected in the config menu.
 pressed_mode_submenu
 	bsf	FLAG_WAITING_FOR_RELEASE
 	bsf	FLAG_MODE_SUBMENU
 	goto	start_rumble_feedback
-	
+
 	;; The button layout submenu was selected in the config menu.
 pressed_layout_submenu
 	bsf	FLAG_WAITING_FOR_RELEASE
 	bsf	FLAG_LAYOUT_SUBMENU
 	goto	start_rumble_feedback
-	
+
 	;; Set the adapter mode to empty controller slot.
 pressed_mode_empty
 	bsf	FLAG_WAITING_FOR_RELEASE
@@ -602,27 +604,27 @@ pressed_preset_up
 	movlw	0x00
 	movwf	active_key_map
 	goto save_active_key_layout
-	
+
 	;; Load custom layout left.
 pressed_preset_left
 	bsf	FLAG_WAITING_FOR_RELEASE
 	movlw	0x10
 	movwf	active_key_map
 	goto save_active_key_layout
-	
+
 	;; Load custom layout right.
 pressed_preset_right
 	bsf	FLAG_WAITING_FOR_RELEASE
 	movlw	0x20
 	movwf	active_key_map
 	goto save_active_key_layout
-	
+
 	;; Load custom layout down.
 pressed_preset_down
 	bsf	FLAG_WAITING_FOR_RELEASE
 	movlw	0x30
 	movwf	active_key_map
-	
+
 	;; Save last used preset in eeprom.
 save_active_key_layout
 	banksel	EEDATA
@@ -665,7 +667,7 @@ accept_remap_dest
 	banksel	EEDATA
 	movwf	EEDATA		; Destination button is data, source is address.
 	bcf	STATUS, RP0		; No mirror of GPR in Bank 1 for 12F683 need to switch to Bank 0 for variables access.
-	movf	remap_source_button, w		
+	movf	remap_source_button, w
 	addwf	active_key_map, w	; Add offset to eeprom address to read the right custom buttons layout.
 	banksel EEADR
 	movwf	EEADR
@@ -683,7 +685,7 @@ accept_mode_select
 	btfsc	gamecube_buffer + GC_D_LEFT
 	goto	pressed_mode_rumble
 	return
-	
+
 	;; Accept the button layout selection.
 accept_layout_select
 	bcf		FLAG_LAYOUT_SUBMENU
@@ -696,7 +698,7 @@ accept_layout_select
 	btfsc	gamecube_buffer + GC_D_DOWN
 	goto	pressed_preset_down
 	return
-	
+
 	;; Check our EEPROM for the magic word identifying it as button mapping data for
 	;; this version of our firmware. If we don't find the magic word, reset its contents.
 validate_eeprom
@@ -710,7 +712,7 @@ validate_eeprom
 	xorlw	EEPROM_MAGIC_WORD & 0xFF
 	btfss	STATUS, Z
 	goto	reset_eeprom
-	
+
 	movlw	EEPROM_LAST_KEY_MAP	; Load last used custom layout.
 	call	eeread
 	movwf	active_key_map
@@ -728,7 +730,7 @@ next_eeprom_bank
 	xorlw	NUM_EEPROM_DATA
 	btfss	STATUS, Z
 	goto	next_eeprom_bank
-	
+
 	movlw	EEPROM_MAGIC_ADDR	; Write the magic word
 	banksel	EEADR
 	movwf	EEADR
@@ -739,9 +741,9 @@ next_eeprom_bank
 	banksel	EEADR
 	movwf	EEADR
 	movlw	EEPROM_MAGIC_WORD & 0xFF
-	movwf	EEDATA	
+	movwf	EEDATA
 	call	eewrite
-		
+
 	movlw	EEPROM_LAST_KEY_MAP		;; Init default layout in eeprom.
 	banksel	EEADR
 	movwf	EEADR
@@ -756,7 +758,7 @@ reset_active_eeprom_layout
 	banksel	EEADR
 	movwf	EEADR
 	clrf	EEDATA
-	
+
 	;; Reset to default all button beginning at the current address set.
 reset_next_byte
 	call	eewrite
@@ -827,7 +829,7 @@ update_rumble_feedback
 	;; *******************************************************************************
 	;; ******************************************************  N64 Interface *********
 	;; *******************************************************************************
-	
+
 	;; While waiting for a Wavebird to associate, we don't have any status poll
 	;; so we need to empty the n64_status_buffer before n64_wait_for_command.
 n64_wfc_empty_buffer
@@ -835,7 +837,7 @@ n64_wfc_empty_buffer
 	clrf	n64_status_buffer+1
 	clrf	n64_status_buffer+2
 	clrf	n64_status_buffer+3
-		
+
 	;; Service commands coming in from the N64
 n64_wait_for_command
 	call	n64_wait_for_idle	; Ensure the line is idle first, so we don't jump in to the middle of a command
@@ -875,7 +877,7 @@ n64_wait_for_command
 	xorlw	N64_COMMAND_IDENTIFY
 	btfsc	STATUS, Z
 	goto	n64_send_id
-	
+
 	movf	n64_command, w
 	xorlw	N64_COMMAND_OLD_IDENT
 	btfsc	STATUS, Z
@@ -922,7 +924,7 @@ n64_bus_write
 	xorlw	0xC0			; (only check the top 8 bits. This excludes a few address bits and all check bits)
 	btfss	STATUS, Z
 	return				; Nope, return. We ignore the initialization writes to 0x8000
-	
+
 	btfss	controller_id, 0	; Do not rumble if we are supose to be an empty controller.
 	return
 
@@ -1021,37 +1023,37 @@ n64_rx_command
 	;; *******************************************************************************
 	;; ******************************************************  Gamecube Interface  ***
 	;; *******************************************************************************
-	
+
 	;; To support the Wavebird we must poll the controller identity first.
 gamecube_get_id
 	movlw	0x00			; Put 0x00 in the gamecube_buffer
 	movwf	gamecube_buffer+0
-	
+
 	movlw	gamecube_buffer		; Transmit the gamecube_buffer
 	movwf	FSR
 	movlw	1
 	call	gamecube_tx
-	
+
 	movlw	gamecube_buffer		; Receive 3 status bytes
 	movwf	FSR
 	movlw	3
 	call	gamecube_rx
-	
+
 	btfss	gamecube_buffer+0, 7	; Check only the MSB of the first byte since it's enough
 	return							; to tell between normal controller and Wavebird.
-	
+
 	movlw	0x02					; Wavebird don't have rumble motor so we show to the n64
 	movwf	controller_id			; that we are a controller with empty slot.
-	
+
 	bsf		WAVEBIRD				; We have a Wavebird receiver connected and we check if
 	movf	gamecube_buffer, w		; a Wavebird is associated with it.
 	xorlw	0xA8
 	btfsc	STATUS, Z
 	return
-	
+
 	bsf		WAVEBIRD_ASSOCIATED		; Wavebird is associated and we save his unique id
 	return
-	
+
 	;; If we receive something other than 0xA8xxxx as ID we must repond with the Wavebird unique ID
 	;; at the end of command 0x4Exxxx to enable the WaveBird. It will not answer the poll status otherwise.
 gamecube_init_wavebird
@@ -1065,15 +1067,15 @@ gamecube_init_wavebird
 	movwf	FSR
 	movlw	3
 	call	gamecube_tx
-	
+
 	movlw	gamecube_buffer		; Receive 3 status bytes
 	movwf	FSR
 	movlw	3
 	call	gamecube_rx
-	
+
 	return
-	
-	
+
+
 	;; Poll the gamecube controller's state by transmitting a magical
 	;; poll command (0x400300) then receiving 8 bytes of status.
 gamecube_poll_status
@@ -1129,7 +1131,7 @@ get_repeated_crc
 
 
 	org 0x700
-	
+
 crc_table
 	#include repeated_crc_table.inc
 
