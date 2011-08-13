@@ -113,7 +113,8 @@ io_init		macro
 		n64_status_buffer:4
 
 		active_key_map
-		pass_mode	endc
+		pass_mode
+	endc
 
 	;; The rumble motor should be on
 	#define	FLAG_RUMBLE_MOTOR_ON		flags, 0
@@ -129,7 +130,10 @@ io_init		macro
 
 	;; Wavebird association state.
 	#define WAVEBIRD_ASSOCIATED			flags, 4
-		;; Passthrough mode flag.	#define	PASS_MODE					pass_mode, 0
+	
+	;; Passthrough mode flag.
+	#define	PASS_MODE					pass_mode, 0
+	
 	;; Set when we are waiting for item selection in the top config menu.
 	#define FLAG_TOP_CONFIG_MENU		config_flags, 0
 
@@ -157,7 +161,8 @@ startup
 	clrf	calibration_count
 	clrf	rumble_feedback_count
 	clrf	active_key_map
-		bsf	SW_PIN			; Disable accessory controller.
+	bsf		SW_PIN			; Disable accessory controller.
+	
 	;;Set controller id to occupied slot.
 	movlw	0x01
 	movwf	controller_id
