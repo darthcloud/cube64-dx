@@ -35,16 +35,17 @@
 		#define N64_TRIS	TRISIO, 0
 		#define	GAMECUBE_PIN	GPIO, 1
 		#define	GAMECUBE_TRIS	TRISIO, 1
-
+		#define SW_PIN		GPIO, 2
+		#define SW_TRIS		TRISIO, 2
 		#define RAM_START	0x20
 
 io_init		macro
-		bcf	STATUS, RP0		; Clear output latches
+		bcf	STATUS, RP0		; Clear output latches.
 		clrf	GPIO
-		movlw	0x0F		; Disable the comparator
+		movlw	0x0F		; Disable the comparator.
 		movwf	CMCON0
 		bsf	STATUS, RP0
-		movlw	0x03		; The two controller pins begin as inputs
+		movlw	0x03		; The two controller pins begin as inputs.
 		movwf	TRISIO
 		clrf	ANSEL
 		bcf	STATUS, RP0
@@ -69,8 +70,7 @@ io_init		macro
 	#define	EEPROM_MAGIC_WORD	0xEC70
 	#define EEPROM_MAGIC_ADDR	0x40
 	#define EEPROM_LAST_KEY_MAP	0x50
-
-
+	#define EEPROM_PASS_MODE	0x51
 	;; Reset and interrupt vectors
 	org 0
 	goto	startup
@@ -113,7 +113,7 @@ io_init		macro
 		n64_status_buffer:4
 
 		active_key_map
-	endc
+		pass_mode	endc
 
 	;; The rumble motor should be on
 	#define	FLAG_RUMBLE_MOTOR_ON		flags, 0
@@ -129,7 +129,7 @@ io_init		macro
 
 	;; Wavebird association state.
 	#define WAVEBIRD_ASSOCIATED			flags, 4
-
+		;; Passthrough mode flag.	#define	PASS_MODE					pass_mode, 0
 	;; Set when we are waiting for item selection in the top config menu.
 	#define FLAG_TOP_CONFIG_MENU		config_flags, 0
 
@@ -157,7 +157,7 @@ startup
 	clrf	calibration_count
 	clrf	rumble_feedback_count
 	clrf	active_key_map
-
+		bsf	SW_PIN			; Disable accessory controller.
 	;;Set controller id to occupied slot.
 	movlw	0x01
 	movwf	controller_id
@@ -873,14 +873,9 @@ n64_wait_for_command
 	btfsc	STATUS, Z
 	goto	n64_bus_read
 
-	movf	n64_command, w
-	xorlw	N64_COMMAND_IDENTIFY
-	btfsc	STATUS, Z
-	goto	n64_send_id
-
-	movf	n64_command, w
-	xorlw	N64_COMMAND_OLD_IDENT
-	btfsc	STATUS, Z
+	movf	n64_command, w		; Check for both identity cmd (0x00 & 0xFF) at the same time.
+	btfss	STATUS, Z
+	comf	n64_command, w	btfsc	STATUS, Z
 	goto	n64_send_id
 
 	movf	n64_command, w
