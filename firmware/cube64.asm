@@ -527,6 +527,8 @@ set_virtual_button
     map_button_to   BTN_A,          N64_A
     map_button_to   BTN_R,          N64_R
     map_button_to   BTN_L,          N64_L
+    map_button_to   BTN_RA,         N64_R
+    map_button_to   BTN_LA,         N64_L
 
     map_button_to   BTN_RJ_RIGHT,   N64_C_RIGHT
     map_button_to   BTN_RJ_LEFT,    N64_C_LEFT
@@ -573,6 +575,7 @@ special_layout_modifier
     movwf   temp_key_map
     pop                             ; Pop the stack since we abort this call.
     goto    n64_translate_restart
+
 
     ;; *******************************************************************************
     ;; *************************************************  Dynamic Button Remapping  **
@@ -675,6 +678,13 @@ accept_config_menu_select
     btfsc   gamecube_buffer + GC_Y
     bra     menu_special_source_wait
 
+    bcf     FLAG_TRIGGER            ; Flag not used in following commands.
+
+    ;; The analog trigger mapping combo was pressed.
+    ;; This modify both remap and special combo to allow mapping to analog trigger.
+    btfsc   gamecube_buffer + GC_X
+    bra     menu_trigger_flag_set
+
     ;; The reset combo was pressed. Reset the EEPROM contents of the current active button
     ;; layout, and use the rumble motor for feedback if possible.
     btfsc   gamecube_buffer + GC_Z
@@ -698,6 +708,11 @@ menu_remap_source_wait
 menu_special_source_wait
     bsf     FLAG_SPECIAL
     bsf     FLAG_SOURCE_WAIT
+    goto    start_rumble_feedback
+
+menu_trigger_flag_set
+    bsf     FLAG_TRIGGER
+    bsf     FLAG_TOP_CONFIG_MENU
     goto    start_rumble_feedback
 
 menu_reset_active_eeprom_layout
@@ -727,7 +742,7 @@ accept_remap_dest
     bsf     FLAG_WAITING_FOR_RELEASE
     bcf     FLAG_REMAP
 
-    bra     save_mapping
+    bra     common_accept_dest
 
     ;; Accept the virtual button code for the special function destination in 'w'.
 accept_special_dest
@@ -742,7 +757,18 @@ accept_special_dest
     return
     bsf     EEDATA, SPECIAL_BIT
 
+common_accept_dest
+    btfsc   FLAG_TRIGGER        ; If flag set, this means we want to allow analog trigger mapping.
+    bra     save_mapping
+
+    movf    remap_source_button, w
+    andlw   TRIGGER_TYPE_MASK
+    xorlw   BTN_LA
+    btfsc   STATUS, Z           ; If analog trigger, overwrite source with digital trigger.
+    incf    remap_source_button
+
 save_mapping
+    bcf     FLAG_TRIGGER
     movf    remap_source_button, w
     mullw   EEPROM_BTN_BYTE     ; Offset base on how many bytes per button.
     movff   PRODL, EEADR

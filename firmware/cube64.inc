@@ -46,6 +46,9 @@
     #define FLAG_REMAP                  menu_flags, 4
     #define FLAG_SPECIAL                menu_flags, 5
 
+    ;; Set when we want to remap an analog trigger.
+    #define FLAG_TRIGGER                menu_flags, 6
+
     ;; Button IDs. These are a superset of the GameCube and N64, without any correspondence
     ;; with the wire protocol used by either. They're used as intermediate values when
     ;; translating from GameCube to N64. These IDs are used as indices into the remapping
@@ -98,6 +101,7 @@
         BTN_MODIFIER:4
     endc
 
+    #define TRIGGER_TYPE_MASK   0xFD
     #define LAYOUT_MASK         0x03
     #define BTN_MASK            0x1F
     #define SPECIAL_MASK        0x20
