@@ -153,9 +153,14 @@ N64 then starts a read using 02 80 01.
 This seems to verify that the address bytes in the read
 and write commands use the same format!
 
-The rumble pak returns all 0x80 from this read, while
+The rumble pak returns all 0x80 from this read**, while
 a memory pak will return 0x00. Why doesn't the memory
 pak return 0xFE?
+
+** JG: Actually the read following the 0xFE write to a
+   Rumble Pak is 33 0x00 bytes. Then another write of
+   32 0x80 bytes is done. After which 0x80s is read from
+   the rumble and 0x00s from the Controller Pak.
 
 It looks like the status byte returned from a controller
 pak write is actually a checksum. This would make a lot of
@@ -191,7 +196,7 @@ FF     72  0111 0010
 0x0000 - 0x7FFF :  SRAM, on the memory pak
 
 0x8000          :  Identification/initialization.
-                   Write all 0xFEs to it for initialization, then
+                   Write all 0x80s to it for initialization, then
                    read back 0x00 on the memory pak or 0x80 on the rumble pak.
 
 0xC000          :  Motor control latch (low bit) for the rumble pak

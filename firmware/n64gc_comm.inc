@@ -72,7 +72,7 @@
     ;; therefore reserved for memory mapped I/O used by non-memory peripherals.
     ;;
     ;; 0x8000 is the initiralization/identification word. At startup, a packet
-    ;; of all 0xFE bytes is written there to initialize the controller pak. The
+    ;; of all 0x80 bytes is written there to initialize the controller pak. The
     ;; N64 then reads back either all 0x80, indicating a rumble pak or 0x00,
     ;; indicating a normal SRAM controller pak. Other peripherals like the
     ;; microphone probably have different identifying bytes.

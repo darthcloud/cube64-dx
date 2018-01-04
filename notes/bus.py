@@ -62,7 +62,7 @@ class Bus:
             print "Unknown controller identity %r" % controllerId
 
         # Initialize the controller pak by writing to 0x8000
-        if self.write(0x8000, "\xFE" * 32) == 1:
+        if self.write(0x8000, "\x80" * 32) == 1:
             print "Inverted CRC, controller pak is initialized"
         else:
             print "Non-inverted CRC, controller pak isn't initialized"
