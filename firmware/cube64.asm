@@ -145,9 +145,8 @@ startup
     clrf    menu_flags
     clrf    calibration_count
     clrf    FSR1H                   ; We only need to access first bank, so we set it in FSR high byte right away.
+    clrf    active_key_map
     bsf     INTCON, TMR0IF          ; Set overflow bit for TMR0 to disable rumble feedback.
-    movlw   EEPROM_LAYOUT_0
-    movwf   active_key_map
 
     ;; Set controller id to occupied slot.
     movlw   0x01
@@ -588,9 +587,7 @@ remap_virtual_button
     goto    accept_layout_select
 
     ;; Pass anything else on to the N64, mapped through the EEPROM first
-    mullw   EEPROM_BTN_BYTE         ; Offset base on how many bytes per button.
-    movf    PRODL, w
-    addwf   temp_key_map, w         ; Add offset to read in right buttons layout.
+    eeprom_btn_addr temp_key_map, 0
     call    eeread
     movwf   virtual_map
     movlw   BTN_NONE
@@ -611,7 +608,7 @@ button_no_modifier
     goto    n64_translate_restart
 
 remap_virtual_axis
-    addwf   temp_key_map, w         ; Add offset to read in right buttons layout.
+    eeprom_btn_addr temp_key_map, 0
     call    eeread
     movwf   virtual_map
     goto    set_virtual_axis
@@ -714,9 +711,11 @@ accept_remap_dest
     movwf   EEDATA              ; Destination button is data, source is address.
     movf    remap_source_button, w
     mullw   EEPROM_BTN_BYTE     ; Offset base on how many bytes per button.
+    movff   PRODL, EEADR
+    movf    active_key_map, w   ; Add offset to EEPROM address to read the right custom buttons layout.
+    mullw   EEPROM_LAYOUT_SIZE
     movf    PRODL, w
-    addwf   active_key_map, w   ; Add offset to EEPROM address to read the right custom buttons layout.
-    movwf   EEADR
+    addwf   EEADR, f
     call    eewrite
     bsf     FLAG_WAITING_FOR_RELEASE
     bcf     FLAG_REMAP
@@ -735,10 +734,12 @@ accept_modifier_dest
     movff   remap_dest_button, EEDATA
     bsf     EEDATA, MODIFIER_BIT
     movf    remap_source_button, w
-    mullw   EEPROM_BTN_BYTE     ; Offset base on how many bytes per button.
+    mullw   EEPROM_BTN_BYTE     ; Offset base on how many byte per button
+    movff   PRODL, EEADR
+    movf    active_key_map, w   ; Add offset to EEPROM address to read the right custom buttons layout.
+    mullw   EEPROM_LAYOUT_SIZE
     movf    PRODL, w
-    addwf   active_key_map, w   ; Add offset to EEPROM address to read the right custom buttons layout.
-    movwf   EEADR
+    addwf   EEADR, f
     call    eewrite
     goto    start_rumble_feedback
 
@@ -765,8 +766,6 @@ accept_layout_select
     return
 
     movf    remap_source_button, w
-    mullw   EEPROM_LAYOUT_SIZE
-    movf    PRODL, w
     movwf   active_key_map
     movwf   EEDATA
     movlw   EEPROM_LAST_KEY_MAP
@@ -838,7 +837,8 @@ reset_active_eeprom_layout
     clrf    TBLPTRL
 
     movf    active_key_map, w
-    movwf   EEADR
+    mullw   EEPROM_LAYOUT_SIZE
+    movff   PRODL, EEADR
     TBLRD*
     movff   TABLAT, EEDATA
 

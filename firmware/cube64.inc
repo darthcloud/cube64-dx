@@ -126,3 +126,16 @@
     #define EEPROM_MAGIC_WORD   0xAC0F
     #define EEPROM_MAGIC_ADDR   EEPROM_LAST_KEY_MAP + 1
 
+    ;; Convert virtual button in w to eeprom byte address in w.
+eeprom_btn_addr macro layout, byte
+    mullw   EEPROM_BTN_BYTE         ; Offset base on how many bytes per button.
+    movff   PRODL, temp
+    movf    layout, w               ; Add offset to read in right buttons layout.
+    mullw   EEPROM_LAYOUT_SIZE
+    movf    PRODL, w
+    addwf   temp, w
+    if byte
+        addlw   byte
+    endif
+    endm
+
