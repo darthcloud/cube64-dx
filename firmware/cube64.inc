@@ -21,31 +21,30 @@
     ;; Flag for tracking if remap source is an axis.
     #define FLAG_AXIS                   flags, 3
 
+    ;; Flag for button layout modification.
+    #define FLAG_LAYOUT_MODIFIER        flags, 4
+
     ;; Is the GC controller a WaveBird?
-    #define WAVEBIRD                    flags, 4
+    #define WAVEBIRD                    flags, 5
 
     ;; WaveBird association state.
-    #define WAVEBIRD_ASSOCIATED         flags, 5
+    #define WAVEBIRD_ASSOCIATED         flags, 6
 
     ;; Set when we are waiting for item selection in the top config menu.
-    #define FLAG_TOP_CONFIG_MENU        config_flags, 0
+    #define FLAG_TOP_CONFIG_MENU        menu_flags, 0
 
     ;; Set when we are waiting for user input in the adaptor mode submenu.
-    #define FLAG_MODE_SUBMENU           config_flags, 1
+    #define FLAG_MODE_SUBMENU           menu_flags, 1
 
     ;; Set when we are waiting for user input in the button layout submenu.
-    #define FLAG_LAYOUT_SUBMENU         config_flags, 2
+    #define FLAG_LAYOUT_SUBMENU         menu_flags, 2
 
-    ;; Flag for button layout modification.
-    #define FLAG_LAYOUT_MODIFIER        config_flags, 3
+    ;; Set when we're waiting for the source key for one of the combos.
+    #define FLAG_SOURCE_WAIT            menu_flags, 3
 
-    ;; Set when we're waiting for the source and destination keys, respectively, in a modifier combo.
-    #define FLAG_MODIFIER_SOURCE_WAIT   config_flags, 4
-    #define FLAG_MODIFIER_DEST_WAIT     config_flags, 5
-
-    ;; Set when we're waiting for the source and destination keys, respectively, in a remap combo.
-    #define FLAG_REMAP_SOURCE_WAIT      config_flags, 6
-    #define FLAG_REMAP_DEST_WAIT        config_flags, 7
+    ;; Set when we're waiting for the destination key for one of the combos.
+    #define FLAG_REMAP                  menu_flags, 4
+    #define FLAG_MODIFIER               menu_flags, 5
 
     ;; Button IDs. These are a superset of the GameCube and N64, without any correspondence
     ;; with the wire protocol used by either. They're used as intermediate values when
