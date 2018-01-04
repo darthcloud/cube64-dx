@@ -13,7 +13,7 @@ class SerialBridge:
        the serial port has already been set up for the right baud rate
        and such (38400 8-N-1)
        """
-    def __init__(self, dev="/dev/ttyS0"):
+    def __init__(self, dev="/dev/ttyUSB0"):
         self.fd = open(dev, "wb+")
 
     def write(self, data, replyBytes=0):

@@ -145,13 +145,13 @@ rx_read_loop
 
 
 serial_rx
-    rs232_rx_byte   RX232_PIN, B38400, POLARITY_INVERTED, serial_byte
+    rs232_rx_byte   RX232_PIN, B38400, POLARITY_NORMAL, serial_byte
     movf    serial_byte, w
     return
 
 serial_tx
     movwf   serial_byte
-    rs232_tx_byte   TX232_PIN, B38400, POLARITY_INVERTED, serial_byte
+    rs232_tx_byte   TX232_PIN, B38400, POLARITY_NORMAL, serial_byte
     return
 
 nintendo_tx
