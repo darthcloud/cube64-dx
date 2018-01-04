@@ -36,6 +36,13 @@
     ;; Set when we are waiting for user input in the button layout submenu.
     #define FLAG_LAYOUT_SUBMENU         config_flags, 2
 
+    ;; Flag for button layout modification.
+    #define FLAG_LAYOUT_MODIFIER        config_flags, 3
+
+    ;; Set when we're waiting for the source and destination keys, respectively, in a modifier combo.
+    #define FLAG_MODIFIER_SOURCE_WAIT   config_flags, 4
+    #define FLAG_MODIFIER_DEST_WAIT     config_flags, 5
+
     ;; Set when we're waiting for the source and destination keys, respectively, in a remap combo.
     #define FLAG_REMAP_SOURCE_WAIT      config_flags, 6
     #define FLAG_REMAP_DEST_WAIT        config_flags, 7
@@ -55,10 +62,10 @@
     #define BTN_AL      0x07
     #define BTN_L       0x08
     #define BTN_START   0x09
-    #define BTN_D_LEFT  0x0A
-    #define BTN_D_RIGHT 0x0B
-    #define BTN_D_DOWN  0x0C
-    #define BTN_D_UP    0x0D
+    #define BTN_D_RIGHT 0x0A
+    #define BTN_D_DOWN  0x0B
+    #define BTN_D_UP    0x0C
+    #define BTN_D_LEFT  0x0D
     #define BTN_C_LEFT  0x0E
     #define BTN_C_RIGHT 0x0F
     #define BTN_C_DOWN  0x10
@@ -67,6 +74,12 @@
     #define BTN_J_RIGHT 0x13
     #define BTN_J_DOWN  0x14
     #define BTN_J_UP    0x15
+    #define BTN_NONE    0x7F
+
+    #define LAYOUT_MASK         0x03
+    #define BTN_MASK            0x1F
+    #define MODIFIER_MASK       0x20
+    #define MODIFIER_BIT        5
 
     #define AXIS_DEAD_ZONE      0x0A
     #define AXIS_BTN_THRS       0x30

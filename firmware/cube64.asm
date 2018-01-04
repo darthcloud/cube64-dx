@@ -97,8 +97,10 @@ pll_startup_delay macro
         calibration_count
         rumble_feedback_count
         remap_source_button
+        remap_dest_button
         controller_id
         active_key_map
+        temp_key_map
         crc_work
 
         ;; Stored calibration for each GameCube axis.
@@ -438,12 +440,7 @@ next
     ;; Copy status from the GameCube buffer to the N64 buffer. This first
     ;; stage maps all axes, and maps GameCube buttons to virtual buttons.
 n64_translate_status
-    clrf    n64_status_buffer + 0   ; Start out with everything zeroed...
-    clrf    n64_status_buffer + 1
-    clrf    n64_status_buffer + 2
-    clrf    n64_status_buffer + 3
-    bsf     FLAG_NO_VIRTUAL_BTNS
-
+    movff   active_key_map, temp_key_map
     call    check_calibration_combo
 
     apply_calibration   GC_JOYSTICK_X,  joystick_x_calibration
@@ -466,6 +463,14 @@ n64_translate_status
     apply_sign_deadzone GC_R_ANALOG, 0
 
     call    check_remap_combo       ; Must be after calibration, since it uses analog L and R values
+
+    ;; Restart here if layout modifier button is pressed.
+n64_translate_restart
+    clrf    n64_status_buffer + 0   ; Start out with everything zeroed...
+    clrf    n64_status_buffer + 1
+    clrf    n64_status_buffer + 2
+    clrf    n64_status_buffer + 3
+    bsf     FLAG_NO_VIRTUAL_BTNS
 
     map_button_from     GC_A,       BTN_A
     map_button_from     GC_B,       BTN_B
@@ -504,6 +509,7 @@ n64_translate_status
 
     btfsc   FLAG_NO_VIRTUAL_BTNS
     bcf     FLAG_WAITING_FOR_RELEASE
+    bcf     FLAG_LAYOUT_MODIFIER
     return
 
     ;; This is called by remap_virtual_button to convert a virtual button code,
@@ -575,17 +581,38 @@ remap_virtual_button
     goto    accept_remap_source
     btfsc   FLAG_REMAP_DEST_WAIT
     goto    accept_remap_dest
+    btfsc   FLAG_MODIFIER_SOURCE_WAIT
+    goto    accept_modifier_source
+    btfsc   FLAG_MODIFIER_DEST_WAIT
+    goto    accept_modifier_dest
     btfsc   FLAG_MODE_SUBMENU
     goto    accept_mode_select
     btfsc   FLAG_LAYOUT_SUBMENU
     goto    accept_layout_select
 
     ;; Pass anything else on to the N64, mapped through the EEPROM first
+    addwf   temp_key_map, w         ; Add offset to read in right buttons layout.
     call    eeread
     movwf   virtual_map
+    movlw   BTN_NONE
+    btfss   FLAG_LAYOUT_MODIFIER    ; Allow only one level of button modifier.
+    bra     button_no_modifier
+    btfsc   virtual_map, MODIFIER_BIT
+    movwf   virtual_map             ; Map to no button otherwise
+button_no_modifier
+    btfss   virtual_map, MODIFIER_BIT ; If set, we must use another button layout.
     goto    set_virtual_button
 
+    ;; We got a layout modifier button and we need to start over
+    ;; the mapping in n64_translate_status.
+    bsf     FLAG_LAYOUT_MODIFIER
+    bcf     virtual_map, MODIFIER_BIT ; Clear MSB to compute layout address.
+    movff   virtual_map, temp_key_map
+    pop                             ; Pop the stack since we abort this call.
+    goto    n64_translate_restart
+
 remap_virtual_axis
+    addwf   temp_key_map, w         ; Add offset to read in right buttons layout.
     call    eeread
     movwf   virtual_map
     goto    set_virtual_axis
@@ -629,6 +656,12 @@ pressed_config_menu_combo
 pressed_remap_combo
     bsf     FLAG_WAITING_FOR_RELEASE
     bsf     FLAG_REMAP_SOURCE_WAIT
+    goto    start_rumble_feedback
+
+    ;; The layout modifier combo was pressed. Same process as remap combo.
+pressed_modifier_combo
+    bsf     FLAG_WAITING_FOR_RELEASE
+    bsf     FLAG_MODIFIER_SOURCE_WAIT
     goto    start_rumble_feedback
 
     ;; The reset combo was pressed. Reset the EEPROM contents of the current active button
@@ -705,6 +738,8 @@ accept_config_menu_select
     bcf     FLAG_TOP_CONFIG_MENU
     btfsc   gamecube_buffer + GC_START
     goto    pressed_remap_combo
+    btfsc   gamecube_buffer + GC_Y
+    goto    pressed_modifier_combo
     btfsc   gamecube_buffer + GC_Z
     goto    pressed_reset_combo
     btfsc   gamecube_buffer + GC_D_UP
@@ -722,6 +757,14 @@ accept_remap_source
     bsf     FLAG_REMAP_DEST_WAIT
     return
 
+    ;; Same as remap source for layout modifier.
+accept_modifier_source
+    movwf   remap_source_button
+    bsf     FLAG_WAITING_FOR_RELEASE
+    bcf     FLAG_MODIFIER_SOURCE_WAIT
+    bsf     FLAG_MODIFIER_DEST_WAIT
+    return
+
     ;; Accept the virtual button code for the remap destination in 'w', and write
     ;; the button mapping to EEPROM.
 accept_remap_dest
@@ -732,6 +775,33 @@ accept_remap_dest
     call    eewrite
     bsf     FLAG_WAITING_FOR_RELEASE
     bcf     FLAG_REMAP_DEST_WAIT
+    goto    start_rumble_feedback
+
+    ;; Validate if one of the D pad direction if pressed for the layout modifier combo.
+    ;; Save as a special button if so, return otherwise.
+accept_modifier_dest
+    bsf     FLAG_WAITING_FOR_RELEASE
+    bcf     FLAG_MODIFIER_DEST_WAIT
+
+    btfsc   gamecube_buffer + GC_D_UP
+    bra     save_modifier_dest
+    btfsc   gamecube_buffer + GC_D_LEFT
+    bra     save_modifier_dest
+    btfsc   gamecube_buffer + GC_D_RIGHT
+    bra     save_modifier_dest
+    btfsc   gamecube_buffer + GC_D_DOWN
+    bra     save_modifier_dest
+    return
+
+    ;; Keep only the two LSB and set the MSB and save it as a special button.
+save_modifier_dest
+    andlw   LAYOUT_MASK
+    movwf   EEDATA
+    bsf     EEDATA, MODIFIER_BIT
+    movf    remap_source_button, w
+    addwf   active_key_map, w   ; Add offset to EEPROM address to read the right custom buttons layout.
+    movwf   EEADR
+    call    eewrite
     goto    start_rumble_feedback
 
     ;; Accept the adapter mode selection.
@@ -823,7 +893,6 @@ reset_next_byte
 
     ;; Read from address 'w' of the EEPROM, return in 'w'.
 eeread
-    addwf   active_key_map, w   ; Add offset to read in right buttons layout.
     movwf   EEADR
     bcf     EECON1, EEPGD       ; Select EEPROM.
     bcf     EECON1, CFGS
