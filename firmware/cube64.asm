@@ -589,6 +589,8 @@ remap_virtual_button
     goto    accept_layout_select
 
     ;; Pass anything else on to the N64, mapped through the EEPROM first
+    mullw   EEPROM_BTN_BYTE         ; Offset base on how many bytes per button.
+    movf    PRODL, w
     addwf   temp_key_map, w         ; Add offset to read in right buttons layout.
     call    eeread
     movwf   virtual_map
@@ -712,6 +714,8 @@ accept_source
 accept_remap_dest
     movwf   EEDATA              ; Destination button is data, source is address.
     movf    remap_source_button, w
+    mullw   EEPROM_BTN_BYTE     ; Offset base on how many bytes per button.
+    movf    PRODL, w
     addwf   active_key_map, w   ; Add offset to EEPROM address to read the right custom buttons layout.
     movwf   EEADR
     call    eewrite
@@ -732,6 +736,8 @@ accept_modifier_dest
     movff   remap_dest_button, EEDATA
     bsf     EEDATA, MODIFIER_BIT
     movf    remap_source_button, w
+    mullw   EEPROM_BTN_BYTE     ; Offset base on how many bytes per button.
+    movf    PRODL, w
     addwf   active_key_map, w   ; Add offset to EEPROM address to read the right custom buttons layout.
     movwf   EEADR
     call    eewrite

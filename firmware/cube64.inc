@@ -103,8 +103,11 @@
     #define AXIS_BTN_VALUE      0x54
     #define TRIGGER_BTN_THRS    0x18
 
+    ;; Number of bytes needed in EEPROM for each buttons configuration.
+    #define EEPROM_BTN_BYTE     2
+
     ;; Buttons layout addresses.
-    #define EEPROM_LAYOUT_SIZE  BTN_NONE
+    #define EEPROM_LAYOUT_SIZE  BTN_NONE*EEPROM_BTN_BYTE
     #define EEPROM_LAYOUT_0     0x00
     #define EEPROM_LAYOUT_1     EEPROM_LAYOUT_0 + EEPROM_LAYOUT_SIZE
     #define EEPROM_LAYOUT_2     EEPROM_LAYOUT_1 + EEPROM_LAYOUT_SIZE

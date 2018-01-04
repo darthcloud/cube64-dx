@@ -101,6 +101,7 @@ if __name__ == "__main__":
 
     for address, default in enumerate(buttons_default):
         FILE.write(b"0x%02X" % default)
+        FILE.write(b", 0x%02X" % 0x00)
         if address < buttons.BTN_NONE-1:
             FILE.write(b", ")
 
