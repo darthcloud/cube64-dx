@@ -549,6 +549,31 @@ set_virtual_axis
     map_axis_to     BTN_LJ_UP,      N64_JOYSTICK_Y
     return
 
+    ;; This is called by remap_virtual_button to convert a virtual button code,
+    ;; in virtual button, to a special function of the adapter. This set of virtual
+    ;; buttons do not result in any key press on the host system.
+set_special_button
+    btfsc   FLAG_LAYOUT_MODIFIER    ; Allow only one level of layout modifier.
+    bra     skip_layout_modifier
+
+    ;; Check for layout modifier special function.
+    andlw   ~LAYOUT_MASK
+    xorlw   BTN_MODIFIER
+    bz      special_layout_modifier
+
+skip_layout_modifier
+    return
+
+    ;; We got a layout modifier button and we need to start over
+    ;; the mapping in n64_translate_status.
+special_layout_modifier
+    bsf     FLAG_LAYOUT_MODIFIER
+    movlw   LAYOUT_MASK
+    andwf   virtual_map, w
+    movwf   temp_key_map
+    pop                             ; Pop the stack since we abort this call.
+    goto    n64_translate_restart
+
     ;; *******************************************************************************
     ;; *************************************************  Dynamic Button Remapping  **
     ;; *******************************************************************************
@@ -579,8 +604,8 @@ remap_virtual_button
     goto    accept_source
     btfsc   FLAG_REMAP
     goto    accept_remap_dest
-    btfsc   FLAG_MODIFIER
-    goto    accept_modifier_dest
+    btfsc   FLAG_SPECIAL
+    goto    accept_special_dest
     btfsc   FLAG_MODE_SUBMENU
     goto    accept_mode_select
     btfsc   FLAG_LAYOUT_SUBMENU
@@ -589,27 +614,17 @@ remap_virtual_button
     ;; Pass anything else on to the N64, mapped through the EEPROM first
     eeprom_btn_addr temp_key_map, 0
     call    eeread
+    andlw   BTN_MASK | SPECIAL_MASK
     movwf   virtual_map
-    movlw   BTN_NONE
-    btfss   FLAG_LAYOUT_MODIFIER    ; Allow only one level of button modifier.
-    bra     button_no_modifier
-    btfsc   virtual_map, MODIFIER_BIT
-    movwf   virtual_map             ; Map to no button otherwise
-button_no_modifier
-    btfss   virtual_map, MODIFIER_BIT ; If set, we must use another button layout.
-    goto    set_virtual_button
 
-    ;; We got a layout modifier button and we need to start over
-    ;; the mapping in n64_translate_status.
-    bsf     FLAG_LAYOUT_MODIFIER
-    bcf     virtual_map, MODIFIER_BIT ; Clear MSB to compute layout address.
-    movff   virtual_map, temp_key_map
-    pop                             ; Pop the stack since we abort this call.
-    goto    n64_translate_restart
+    btfss   virtual_map, SPECIAL_BIT
+    goto    set_virtual_button
+    goto    set_special_button
 
 remap_virtual_axis
     eeprom_btn_addr temp_key_map, 0
     call    eeread
+    andlw   BTN_MASK | SPECIAL_MASK
     movwf   virtual_map
     goto    set_virtual_axis
 
@@ -656,9 +671,9 @@ accept_config_menu_select
     btfsc   gamecube_buffer + GC_START
     bra     menu_remap_source_wait
 
-    ;; The layout modifier combo was pressed. Same process as remap combo.
+    ;; The special function combo was pressed. Same process as remap combo.
     btfsc   gamecube_buffer + GC_Y
-    bra     menu_modifier_source_wait
+    bra     menu_special_source_wait
 
     ;; The reset combo was pressed. Reset the EEPROM contents of the current active button
     ;; layout, and use the rumble motor for feedback if possible.
@@ -680,8 +695,8 @@ menu_remap_source_wait
     bsf     FLAG_SOURCE_WAIT
     goto    start_rumble_feedback
 
-menu_modifier_source_wait
-    bsf     FLAG_MODIFIER
+menu_special_source_wait
+    bsf     FLAG_SPECIAL
     bsf     FLAG_SOURCE_WAIT
     goto    start_rumble_feedback
 
@@ -709,32 +724,27 @@ accept_source
     ;; the button mapping to EEPROM.
 accept_remap_dest
     movwf   EEDATA              ; Destination button is data, source is address.
-    movf    remap_source_button, w
-    mullw   EEPROM_BTN_BYTE     ; Offset base on how many bytes per button.
-    movff   PRODL, EEADR
-    movf    active_key_map, w   ; Add offset to EEPROM address to read the right custom buttons layout.
-    mullw   EEPROM_LAYOUT_SIZE
-    movf    PRODL, w
-    addwf   EEADR, f
-    call    eewrite
     bsf     FLAG_WAITING_FOR_RELEASE
     bcf     FLAG_REMAP
-    goto    start_rumble_feedback
 
-    ;; Validate if one of the D pad direction if pressed for the layout modifier combo.
-    ;; Save as a special button if so, return otherwise.
-accept_modifier_dest
-    movwf   remap_dest_button
+    bra     save_mapping
+
+    ;; Accept the virtual button code for the special function destination in 'w'.
+accept_special_dest
+    movwf   EEDATA
     bsf     FLAG_WAITING_FOR_RELEASE
-    bcf     FLAG_MODIFIER
-    andlw   ~LAYOUT_MASK            ; Check for any D-pad direction.
+    bcf     FLAG_SPECIAL
+
+    ;; Validate if one of the D-pad direction is pressed for the layout modifier function.
+    ;; Save as a special button if so, return otherwise.
+    andlw   ~LAYOUT_MASK        ; Check for any D-pad direction.
     btfss   STATUS, Z
     return
+    bsf     EEDATA, SPECIAL_BIT
 
-    movff   remap_dest_button, EEDATA
-    bsf     EEDATA, MODIFIER_BIT
+save_mapping
     movf    remap_source_button, w
-    mullw   EEPROM_BTN_BYTE     ; Offset base on how many byte per button
+    mullw   EEPROM_BTN_BYTE     ; Offset base on how many bytes per button.
     movff   PRODL, EEADR
     movf    active_key_map, w   ; Add offset to EEPROM address to read the right custom buttons layout.
     mullw   EEPROM_LAYOUT_SIZE

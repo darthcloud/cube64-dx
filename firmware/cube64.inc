@@ -44,7 +44,7 @@
 
     ;; Set when we're waiting for the destination key for one of the combos.
     #define FLAG_REMAP                  menu_flags, 4
-    #define FLAG_MODIFIER               menu_flags, 5
+    #define FLAG_SPECIAL                menu_flags, 5
 
     ;; Button IDs. These are a superset of the GameCube and N64, without any correspondence
     ;; with the wire protocol used by either. They're used as intermediate values when
@@ -93,10 +93,15 @@
         BTN_NONE
     endc
 
+    ;; Adapter internal special button, do not map to any button on the host system.
+    cblock 0x20
+        BTN_MODIFIER:4
+    endc
+
     #define LAYOUT_MASK         0x03
     #define BTN_MASK            0x1F
-    #define MODIFIER_MASK       0x20
-    #define MODIFIER_BIT        5
+    #define SPECIAL_MASK        0x20
+    #define SPECIAL_BIT         5
 
     #define AXIS_DEAD_ZONE      0x0A
     #define AXIS_BTN_THRS       0x30
