@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 #
 # Create a map of valid addresses. RA4 on the serial_bridge should
 # be connected to the WR pin on the controller bus.

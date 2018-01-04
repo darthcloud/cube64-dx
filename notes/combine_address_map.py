@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 from crc import bin, cPickle
 
 # Create a mapping from valid addresses to the resulting start address on the bus.

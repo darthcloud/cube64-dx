@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 #
 # Implementation of an address encoding algorithm compatible with the
 # one for bus reads and writes on N64 controllers. This algorithm was

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 #
 # Using a microcontroller with the serial_bridge firmware installed,
 # this sends several controller bus writes with different content.

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 #
 # Using the valid.addresses file created by find_valid_addresses,
 # generate another map of just the addresses that generate a pulse

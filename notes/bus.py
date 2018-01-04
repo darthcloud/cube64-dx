@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 #
 # A higher level interface to the N64 controller's bus,
 # using the CRC, address encoding, and low level interface

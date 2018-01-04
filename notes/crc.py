@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 #
 # Implementation of a CRC algorithm compatible with the one used
 # for bus reads and writes on N64 controllers. This algorithm was
