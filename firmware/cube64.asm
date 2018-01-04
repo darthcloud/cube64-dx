@@ -20,8 +20,7 @@
     ;; It might not respond to unusual circumstances the same as a real N64
     ;; controller would, both due to potential gaps in the reverse engineering,
     ;; and due to corners cut in the algorithm implementation to fit it on
-    ;; this microcontroller. In particular, only a partial implementation of
-    ;; the CRC algorithm is used and the address check bits are ignored.
+    ;; this microcontroller.
     ;;
 
     ;; Definitions for the PIC18F14K22 version
@@ -51,6 +50,8 @@ io_init macro
         clrf    WPUA        ; Disable pull-ups.
         movlw   0x30        ; The two controller pins begin as inputs.
         movwf   TRISA
+        clrf    PORTC       ; Debug port
+        clrf    TRISC       ; Debug port
         clrf    ANSEL       ; Set IOs to digital.
         clrf    ANSELH
         endm
@@ -97,6 +98,8 @@ pll_startup_delay macro
         rumble_feedback_count
         remap_source_button
         controller_id
+        active_key_map
+        crc_work
 
         ;; Stored calibration for each GameCube axis.
         joystick_x_calibration
@@ -117,8 +120,6 @@ pll_startup_delay macro
         n64_id_buffer:3
         gamecube_buffer:8
         n64_status_buffer:4
-
-        active_key_map
     endc
 
     ;; *******************************************************************************
@@ -132,9 +133,9 @@ startup
     pll_startup_delay               ; Wait for PLL to shift frequency to 64 MHz.
     io_init
 
-    movlw   upper crc_table         ; Preload table upper & high address bytes.
+    movlw   upper crc_large_table   ; Preload table upper & high address bytes.
     movwf   TBLPTRU
-    movlw   high crc_table
+    movlw   high crc_large_table
     movwf   TBLPTRH
 
     n64gc_init
@@ -824,7 +825,7 @@ time_killing
     movlw   .34                 ; Reset bus_byte_count to 34. Keeping this set beforehand
     movwf   bus_byte_count      ; saves a few precious cycles in receiving bus writes.
 
-    call    get_repeated_crc    ; Get our limited CRC from the lookup table.
+    movf    crc_work, w         ; Computed CRC already in crc_work.
     xorlw   0xFF                ; Negate the CRC, we emulate a rumble pak.
     movwf   n64_crc             ; Send back the CRC in a 1-byte transmission.
     movlw   n64_crc
@@ -874,12 +875,12 @@ pak_identify_fill_loop
     decfsz  byte_count, f
     goto    pak_identify_fill_loop
 
-    movlw   0xB8                ; 0xB8 is the inverted CRC of a packet with all 0x80s.
+    movlw   0xFF                ; Preload n64_crc for final CRC XOR.
     movwf   n64_crc
 
     movlw   n64_bus_packet      ; Send back the data and CRC.
     movwf   FSR1L
-    movlw   .33
+    movlw   .33                 ; Send 32 bytes data and 1 byte CRC right after.
     goto    n64_tx              ; We need a 2us stop bit after all CRCs.
 
     ;; The N64 asked for our button and joystick status.
@@ -907,12 +908,11 @@ n64_send_id
     ;; Don't return until the N64 data line has been idle long enough to ensure
     ;; we aren't in the middle of a packet already.
 n64_wait_for_idle
-    movlw   0x10
+    movlw   0x33
     movwf   temp
 keep_waiting_for_idle
     btfss   N64_PIN
     goto    n64_wait_for_idle
-    pad_10_cycles
     decfsz  temp, f
     goto    keep_waiting_for_idle
     return
@@ -921,11 +921,7 @@ keep_waiting_for_idle
     ;; been left high by a read-modify-write operation elsewhere.
     ;; For controller response we allways need an 2us stop bit.
 n64_tx
-    pad_11_cycles
-    pad_11_cycles
-    pad_11_cycles
-    pad_11_cycles
-    pad_11_cycles
+    wait    .55
     bsf     N64_TRIS
     bcf     N64_PIN
     n64gc_tx_buffer N64_TRIS, 1
@@ -1031,27 +1027,14 @@ gamecube_rx
     ;; ******************************************************  Lookup Tables  ********
     ;; *******************************************************************************
 
-    ;; This is a table of the resulting CRCs
-    ;; for every message consisting of 32 copies
-    ;; of a single byte. It's cheesy, but our
-    ;; microcontroller is a bit on the slow side
-    ;; to implement the full CRC in the allotted time,
-    ;; and this is all we need for initialization
-    ;; and rumble pak support.
+    ;; 256-byte table extracted from the test vectors, that can be used to
+    ;; compute any CRC. This table is the inverted CRC generated for every
+    ;; possible message with exactly one bit set.
     ;;
-    ;; It was generated using the small-table
-    ;; implementation of the CRC, in notes/crc.py
-get_repeated_crc
-    movf    n64_bus_packet, w
-    movwf   TBLPTRL
-    TBLRD*
-    movf    TABLAT, w
-    return
-
-
+    ;; It was generated using the reversed large-table
+    ;; implementation of the CRC, in notes/gen_asm_large_table_crc.py
     org     0x3F00
-
-crc_table
-    #include repeated_crc_table.inc
+crc_large_table
+    #include large_table_crc.inc
 
     end

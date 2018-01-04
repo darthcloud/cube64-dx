@@ -103,6 +103,21 @@ def largeTableCRC(packet, table):
     return crc
 
 
+def reversedLargeTableCRC(packet, table, verbose=0):
+    """Table-driven reimplementation of Nintendo's CRC using a 256-byte table.
+       This function expect a reversed large table. This way of processing the
+       CRC computation is easier to implement within the protocol bit banging.
+       """
+    crc = 0xFF
+    for byte in xrange(31, -1, -1):
+        for bit in xrange(7, -1, -1):
+            if packet[31-byte] & 1<<bit:
+                crc ^= table[(byte*8) + bit]
+            if verbose:
+                print "bit: 0x%02X:%d, table: 0x%02X, crc: 0x%02X" % (((byte*8) + bit), 1 if packet[31-byte] & 1<<bit else 0, table[(byte*8) + bit], crc)
+    return crc
+
+
 def smallTableCRC(packet, table=None):
     """Table-driven reimplementation of Nintendo's CRC using a 32-byte table"""
     if not table:
