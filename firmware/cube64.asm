@@ -95,7 +95,6 @@ pll_startup_delay macro
         menu_flags
         virtual_map
         calibration_count
-        rumble_feedback_count
         remap_source_button
         remap_dest_button
         ctrl_slot_status
@@ -145,8 +144,8 @@ startup
     clrf    flags
     clrf    menu_flags
     clrf    calibration_count
-    clrf    rumble_feedback_count
     clrf    FSR1H                   ; We only need to access first bank, so we set it in FSR high byte right away.
+    bsf     INTCON, TMR0IF          ; Set overflow bit for TMR0 to disable rumble feedback.
     movlw   EEPROM_LAYOUT_0
     movwf   active_key_map
 
@@ -882,24 +881,28 @@ eewrite
     return
 
     ;; Briefly enable the rumble motor on our own, as feedback during remap combos.
-    ;; Since we don't have a long-period timebase of our own and it isn't practical
-    ;; to use TMR0, this uses the N64's polling rate as a timebase. The length
-    ;; of the rumble will depend on the game's frame rate, but this should be good enough.
+    ;; This use TMR0 in 16-bit mode and will provide feedback for 250 ms.
 start_rumble_feedback
-    movlw   .16
-    movwf   rumble_feedback_count
+    bcf     INTCON, TMR0IF      ; Clear overflow bit.
+    movlw   0x87                ; Enable 16-bit mode with 1:256 prescaler.
+    movwf   T0CON
+    movlw   0xC2
+    movwf   TMR0H
+    movlw   0xF6
+    movwf   TMR0L               ; TMR0 now loaded with 0xC2F6.
     return
 
     ;; At each status poll, turn on the rumble motor if we're in the middle of
-    ;; giving feedback, and decrement our counter.
+    ;; giving feedback.
 update_rumble_feedback
-    movf    rumble_feedback_count, w
-    btfsc   STATUS, Z
-    return                          ; No feedback to give
+    btfss   T0CON, TMR0ON
+    return
     bsf     FLAG_RUMBLE_MOTOR_ON
-    decfsz  rumble_feedback_count, f
+
+    btfss   INTCON, TMR0IF
     return
     bcf     FLAG_RUMBLE_MOTOR_ON    ; We need to turn off the motor when we're done
+    bcf     T0CON, TMR0ON
     return
 
 
