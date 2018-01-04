@@ -93,7 +93,7 @@ pll_startup_delay macro
         bus_byte_count
         flags
         config_flags
-        virtual_button
+        virtual_map
         calibration_count
         rumble_feedback_count
         remap_source_button
@@ -293,6 +293,23 @@ no_calibration_combo
     ;; it translates buttons via an intermetdiate virtual button ID that's used by
     ;; the dynamic mapping layer. This layer defines our default mappings.
 
+    ;; Compare absolute value between 2 bytes and assign
+    ;; the greater value to the destination.
+assign_greater_abs_value macro prospect_byte, dest_byte
+    local   next
+    movff   prospect_byte, temp
+    btfsc   prospect_byte, 7                 ; If prospect negative then
+    negf    temp                             ; two's complement it.
+    movf    temp, w
+    movff   dest_byte, temp
+    btfsc   dest_byte, 7                     ; Same for dest.
+    negf    temp
+    cpfslt  temp                             ; If prospect abs value greater
+    goto    next                             ; than dest, overwrite it.
+    movff   prospect_byte, dest_byte
+next
+    endm
+
     ;; Map a GameCube button to a virtual button, and eventually to an N64 button.
 map_button_from macro src_byte, src_bit, virtual
     movlw   virtual
@@ -304,7 +321,7 @@ map_button_from macro src_byte, src_bit, virtual
     ;; currently in virtual_button, sets the corresponding N64 bit and returns.
 map_button_to macro virtual, dest_byte, dest_bit
     local   next
-    movf    virtual_button, w
+    movf    virtual_map, w
     xorlw   virtual
     btfss   STATUS, Z
     goto    next
@@ -340,11 +357,36 @@ negative_axis_value
 next
     endm
 
-    ;; Map a GC axis to a N64 axis.
-    ;; Doesn't allow any remapping.
-map_axis macro src_byte, dest_byte
-    movf    gamecube_buffer + src_byte, w
-    movwf   n64_status_buffer + dest_byte
+    ;; Map a GameCube axis to a virtual button, and eventually to an N64 axis or button.
+map_axis_from macro src_byte, virtual
+    movff   gamecube_buffer + src_byte, temp2
+    movlw   virtual
+    if virtual & 0x01               ; Check direction (sign) of the virtual button.
+        btfss   temp2, 7            ; Virtual button is positive, skip if buffer negative.
+    else
+        btfsc   temp2, 7            ; Virtual button is negative, skip if buffer positive.
+    endif
+    call    remap_virtual_axis      ; Call if buffer sign match virtual button sign.
+    endm
+
+    ;; Map a virtual button to an N64 axis. If the indicated axis is the one
+    ;; currently in virtual_button, sets the corresponding N64 byte if its
+    ;; absolute value is greater than the current one.
+map_axis_to macro virtual, dest_byte
+    local   next
+    movf    virtual_map, w
+    xorlw   virtual
+    btfss   STATUS, Z
+    goto    next
+    if virtual & 0x01               ; Check direction (sign) of the virtual button.
+        btfsc   temp2, 7            ; Virtual button is positive, skip if buffer positive.
+    else
+        btfss   temp2, 7            ; Virtual button is negative, skip if buffer negative.
+    endif
+    negf    temp2                   ; Two's complement buffer if sign mismatch.
+    assign_greater_abs_value temp2, n64_status_buffer + dest_byte
+    return
+next
     endm
 
     ;; Map an 8-bit 0x80-centered axis to two virtual buttons,
@@ -364,6 +406,22 @@ map_button_axis macro axis_byte, lower_virtual, upper_virtual, thresh
     goto    $+8
     btfss   STATUS, N
     call    remap_virtual_button            ; N=0, OV=0, (upper_thresh+1) <= axis
+    endm
+
+    ;; Map a button to one axis direction.
+map_axis_button macro virtual, dest_byte
+    local   next
+    movf    virtual_map, w
+    xorlw   virtual
+    btfss   STATUS, Z
+    goto    next
+    if virtual & 0x01                       ; Set value sign base on virtual button sign.
+        movlw   AXIS_BTN_VALUE
+    else
+        movlw   -AXIS_BTN_VALUE
+    endif
+    movwf   n64_status_buffer + dest_byte   ; Could be overwritten by a real axis.
+next
     endm
 
     ;; Copy status from the GameCube buffer to the N64 buffer. This first
@@ -406,11 +464,21 @@ n64_translate_status
     map_button_from     GC_D_UP,    BTN_D_UP
     map_button_from     GC_D_DOWN,  BTN_D_DOWN
 
-    map_axis    GC_JOYSTICK_X,  N64_JOYSTICK_X
-    map_axis    GC_JOYSTICK_Y,  N64_JOYSTICK_Y
+    map_axis_from       GC_JOYSTICK_X,  BTN_J_LEFT
+    map_axis_from       GC_JOYSTICK_X,  BTN_J_RIGHT
+    map_axis_from       GC_JOYSTICK_Y,  BTN_J_DOWN
+    map_axis_from       GC_JOYSTICK_Y,  BTN_J_UP
+    map_axis_from       GC_CSTICK_X,  BTN_C_LEFT
+    map_axis_from       GC_CSTICK_X,  BTN_C_RIGHT
+    map_axis_from       GC_CSTICK_Y,  BTN_C_DOWN
+    map_axis_from       GC_CSTICK_Y,  BTN_C_UP
 
+    bsf     FLAG_AXIS
+    map_button_axis     GC_JOYSTICK_X, BTN_J_LEFT, BTN_J_RIGHT, AXIS_BTN_THRS
+    map_button_axis     GC_JOYSTICK_Y, BTN_J_DOWN, BTN_J_UP, AXIS_BTN_THRS
     map_button_axis     GC_CSTICK_X, BTN_C_LEFT, BTN_C_RIGHT, AXIS_BTN_THRS
     map_button_axis     GC_CSTICK_Y, BTN_C_DOWN, BTN_C_UP, AXIS_BTN_THRS
+    bcf     FLAG_AXIS
 
     btfsc   FLAG_NO_VIRTUAL_BTNS
     bcf     FLAG_WAITING_FOR_RELEASE
@@ -438,8 +506,22 @@ set_virtual_button
     map_button_to   BTN_C_LEFT,     N64_C_LEFT
     map_button_to   BTN_C_DOWN,     N64_C_DOWN
     map_button_to   BTN_C_UP,       N64_C_UP
+
+    btfsc   FLAG_AXIS
     return
 
+    map_axis_button BTN_J_RIGHT,    N64_JOYSTICK_X
+    map_axis_button BTN_J_LEFT,     N64_JOYSTICK_X
+    map_axis_button BTN_J_DOWN,     N64_JOYSTICK_Y
+    map_axis_button BTN_J_UP,       N64_JOYSTICK_Y
+    return
+
+set_virtual_axis
+    map_axis_to     BTN_J_LEFT,     N64_JOYSTICK_X
+    map_axis_to     BTN_J_RIGHT,    N64_JOYSTICK_X
+    map_axis_to     BTN_J_DOWN,     N64_JOYSTICK_Y
+    map_axis_to     BTN_J_UP,       N64_JOYSTICK_Y
+    return
 
     ;; *******************************************************************************
     ;; *************************************************  Dynamic Button Remapping  **
@@ -478,8 +560,13 @@ remap_virtual_button
 
     ;; Pass anything else on to the N64, mapped through the EEPROM first
     call    eeread
-    movwf   virtual_button
+    movwf   virtual_map
     goto    set_virtual_button
+
+remap_virtual_axis
+    call    eeread
+    movwf   virtual_map
+    goto    set_virtual_axis
 
     ;; Looks for the key combinations we use to change button mapping
 check_remap_combo

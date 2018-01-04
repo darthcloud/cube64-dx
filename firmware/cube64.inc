@@ -18,11 +18,14 @@
     ;; Flag for detecting when all buttons are released.
     #define FLAG_NO_VIRTUAL_BTNS        flags, 2
 
+    ;; Flag for tracking if remap source is an axis.
+    #define FLAG_AXIS                   flags, 3
+
     ;; Is the GC controller a WaveBird?
-    #define WAVEBIRD                    flags, 3
+    #define WAVEBIRD                    flags, 4
 
     ;; WaveBird association state.
-    #define WAVEBIRD_ASSOCIATED         flags, 4
+    #define WAVEBIRD_ASSOCIATED         flags, 5
 
     ;; Set when we are waiting for item selection in the top config menu.
     #define FLAG_TOP_CONFIG_MENU        config_flags, 0
@@ -58,12 +61,17 @@
     #define BTN_C_RIGHT 0x0D
     #define BTN_C_DOWN  0x0E
     #define BTN_C_UP    0x0F
+    #define BTN_J_LEFT  0x10
+    #define BTN_J_RIGHT 0x11
+    #define BTN_J_DOWN  0x12
+    #define BTN_J_UP    0x13
 
     #define AXIS_DEAD_ZONE      0x0A
     #define AXIS_BTN_THRS       0x30
+    #define AXIS_BTN_VALUE      0x54
 
     ;; Buttons layout addresses.
-    #define EEPROM_LAYOUT_SIZE  0x10
+    #define EEPROM_LAYOUT_SIZE  0x20
     #define EEPROM_LAYOUT_0     0x00
     #define EEPROM_LAYOUT_1     EEPROM_LAYOUT_0 + EEPROM_LAYOUT_SIZE
     #define EEPROM_LAYOUT_2     EEPROM_LAYOUT_1 + EEPROM_LAYOUT_SIZE
