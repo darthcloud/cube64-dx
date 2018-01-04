@@ -313,13 +313,13 @@ map_button_to macro virtual, dest_byte, dest_bit
 next
     endm
 
-    ;; Map an 8-bit 0x80-centered axis to an 8-bit signed axis.
-    ;; Doesn't allow any remapping.
-map_axis macro src_byte, dest_byte
+    ;; Sign an 8-bit 0x80-centered axis.
+    ;; Also apply a dead zone.
+apply_sign_deadzone macro src_byte
     local   negative_axis_value
-    local   load_gc_buffer_to_n64
+    local   next
 
-    movlw   0x80                            ; Sign GC axis value.
+    movlw   0x80                             ; Sign GC axis value.
     subwf   gamecube_buffer + src_byte, f
     movlw   AXIS_DEAD_ZONE
     btfsc   gamecube_buffer + src_byte, 7    ; Check value sign.
@@ -329,7 +329,7 @@ map_axis macro src_byte, dest_byte
     subwf   gamecube_buffer + src_byte, f
     btfsc   gamecube_buffer + src_byte, 7
     clrf    gamecube_buffer + src_byte
-    goto    load_gc_buffer_to_n64
+    goto    next
 
     ;; Current value is negative.
 negative_axis_value
@@ -337,24 +337,33 @@ negative_axis_value
     btfss   gamecube_buffer + src_byte, 7
     clrf    gamecube_buffer + src_byte
 
-load_gc_buffer_to_n64
+next
+    endm
+
+    ;; Map a GC axis to a N64 axis.
+    ;; Doesn't allow any remapping.
+map_axis macro src_byte, dest_byte
     movf    gamecube_buffer + src_byte, w
     movwf   n64_status_buffer + dest_byte
     endm
 
     ;; Map an 8-bit 0x80-centered axis to two virtual buttons,
-    ;; given lower and upper thresholds.
-map_button_axis macro axis_byte, lower_virtual, upper_virtual, lower_thresh, upper_thresh
-    movlw   lower_thresh
+    ;; given a threshold.
+map_button_axis macro axis_byte, lower_virtual, upper_virtual, thresh
+    movlw   -thresh
     subwf   gamecube_buffer + axis_byte, w  ; Axis - lower_thresh
     movlw   lower_virtual
-    btfss   STATUS, C
-    call    remap_virtual_button            ; C=0, B=1, lower_thresh > axis
-    movlw   upper_thresh + 1
+    btfsc   STATUS, OV
+    goto    $+8
+    btfsc   STATUS, N
+    call    remap_virtual_button            ; N=1, OV=0, lower_thresh > axis
+    movlw   thresh + 1
     subwf   gamecube_buffer + axis_byte, w  ; Axis - (upper_thresh+1)
     movlw   upper_virtual
-    btfsc   STATUS, C
-    call    remap_virtual_button            ; C=1, B=0, (upper_thresh+1) <= axis
+    btfsc   STATUS, OV
+    goto    $+8
+    btfss   STATUS, N
+    call    remap_virtual_button            ; N=0, OV=0, (upper_thresh+1) <= axis
     endm
 
     ;; Copy status from the GameCube buffer to the N64 buffer. This first
@@ -374,6 +383,11 @@ n64_translate_status
     apply_calibration   GC_CSTICK_Y,    cstick_y_calibration
     apply_calibration   GC_L_ANALOG,    left_calibration
     apply_calibration   GC_R_ANALOG,    right_calibration
+
+    apply_sign_deadzone GC_JOYSTICK_X
+    apply_sign_deadzone GC_JOYSTICK_Y
+    apply_sign_deadzone GC_CSTICK_X
+    apply_sign_deadzone GC_CSTICK_Y
 
     call    check_remap_combo       ; Must be after calibration, since it uses analog L and R values
 
@@ -395,8 +409,8 @@ n64_translate_status
     map_axis    GC_JOYSTICK_X,  N64_JOYSTICK_X
     map_axis    GC_JOYSTICK_Y,  N64_JOYSTICK_Y
 
-    map_button_axis     GC_CSTICK_X, BTN_C_LEFT, BTN_C_RIGHT,   0x50, 0xB0
-    map_button_axis     GC_CSTICK_Y, BTN_C_DOWN, BTN_C_UP,      0x50, 0xB0
+    map_button_axis     GC_CSTICK_X, BTN_C_LEFT, BTN_C_RIGHT, AXIS_BTN_THRS
+    map_button_axis     GC_CSTICK_Y, BTN_C_DOWN, BTN_C_UP, AXIS_BTN_THRS
 
     btfsc   FLAG_NO_VIRTUAL_BTNS
     bcf     FLAG_WAITING_FOR_RELEASE

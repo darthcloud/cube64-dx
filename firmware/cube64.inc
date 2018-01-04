@@ -60,6 +60,7 @@
     #define BTN_C_UP    0x0F
 
     #define AXIS_DEAD_ZONE      0x0A
+    #define AXIS_BTN_THRS       0x30
 
     ;; Buttons layout addresses.
     #define EEPROM_LAYOUT_SIZE  0x10
