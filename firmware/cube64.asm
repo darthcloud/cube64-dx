@@ -880,8 +880,7 @@ n64_wait_for_command
 
 	movf	n64_command, w		; Check for both identity cmd (0x00 & 0xFF) at the same time.
 	btfss	STATUS, Z
-	comf	n64_command, w
-	btfsc	STATUS, Z
+	comf	n64_command, w	btfsc	STATUS, Z
 	goto	n64_send_id
 
 	movf	n64_command, w
