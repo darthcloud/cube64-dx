@@ -850,30 +850,34 @@ time_killing
     ;; If all is well, this should only happen at address 0x8000, where it
     ;; tries to identify what type of controller pak we have. Always
     ;; indicate we have a rumble pak by sending all 0x80s.
-    ;;
-    ;; Since we're assuming the address is 0x8000, don't even bother scrambling
-    ;; to start receiving it in time. From the end of the command byte to when
-    ;; we start transmitting should be about 67us, or 335 cycles.
 n64_bus_read
-    movlw   .147
-    movwf   byte_count
-time_killing2
-    goto    $+4
-    decfsz  byte_count, f
-    goto    time_killing2
+    movlw   .2                  ; Read 2 address bytes.
+    movwf   byte_count          ; FSR already point at n64_bus_address.
+    call    n64_rx_address
 
-    movlw   .32                 ; Fill the buffer with 0x80.
+    movlw   .32
     movwf   byte_count
-    movlw   n64_bus_packet
-    movwf   FSR1L
-pak_identify_fill_loop
+
+    movlw   0x01                ; Check if address is 0x8001, answer 0x80s if so.
+    xorwf   n64_bus_address + 1, w
+    btfss   STATUS, Z
+    goto    zero_packet
     movlw   0x80
+    xorwf   n64_bus_address + 0, f
+    btfss   STATUS, Z
+    goto    zero_packet
+    goto    setup_buffer        ; We conveniently already got 0x80 in w.
+zero_packet
+    movlw   0x00                ; Otherwise reply 0x00s.
+
+setup_buffer
+    incf    FSR1L, f
+
+bus_read_fill_loop
     movwf   INDF1
     incf    FSR1L, f
-    goto    $+4                 ; Padding to make this loop take most of the
-    goto    $+4                 ; 335 cycles we need to waste.
     decfsz  byte_count, f
-    goto    pak_identify_fill_loop
+    goto    bus_read_fill_loop
 
     movlw   0xFF                ; Preload n64_crc for final CRC XOR.
     movwf   n64_crc
@@ -928,6 +932,9 @@ n64_tx
 
 n64_rx_bus
     n64gc_rx_buffer N64_PIN, bus_byte_count, 0
+
+n64_rx_address
+    n64gc_rx_buffer N64_PIN, byte_count, 0
 
 n64_rx_command
     movlw   .1
