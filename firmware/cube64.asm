@@ -330,14 +330,16 @@ map_button_to macro virtual, dest_byte, dest_bit
 next
     endm
 
-    ;; Sign an 8-bit 0x80-centered axis.
+    ;; Sign an 8-bit 0x80-centered axis if sign=1.
     ;; Also apply a dead zone.
-apply_sign_deadzone macro src_byte
+apply_sign_deadzone macro src_byte, sign
     local   negative_axis_value
     local   next
 
-    movlw   0x80                             ; Sign GC axis value.
-    subwf   gamecube_buffer + src_byte, f
+    if sign
+        movlw   0x80                         ; Sign GC axis value.
+        subwf   gamecube_buffer + src_byte, f
+    endif
     movlw   AXIS_DEAD_ZONE
     btfsc   gamecube_buffer + src_byte, 7    ; Check value sign.
     goto    negative_axis_value
@@ -389,9 +391,18 @@ map_axis_to macro virtual, dest_byte
 next
     endm
 
+    ;; Map an unsigned axis to a virtual button given a threshold.
+map_button_axis macro axis_byte, virtual, thresh
+    movlw   thresh + 1
+    subwf   gamecube_buffer + axis_byte, w  ; Axis - (upper_thresh+1)
+    movlw   virtual
+    btfsc   STATUS, C
+    call    remap_virtual_button            ; C=1, B=0, (upper_thresh+1) <= axis
+    endm
+
     ;; Map an 8-bit 0x80-centered axis to two virtual buttons,
     ;; given a threshold.
-map_button_axis macro axis_byte, lower_virtual, upper_virtual, thresh
+map_button_axis_sign macro axis_byte, lower_virtual, upper_virtual, thresh
     movlw   -thresh
     subwf   gamecube_buffer + axis_byte, w  ; Axis - lower_thresh
     movlw   lower_virtual
@@ -442,10 +453,17 @@ n64_translate_status
     apply_calibration   GC_L_ANALOG,    left_calibration
     apply_calibration   GC_R_ANALOG,    right_calibration
 
-    apply_sign_deadzone GC_JOYSTICK_X
-    apply_sign_deadzone GC_JOYSTICK_Y
-    apply_sign_deadzone GC_CSTICK_X
-    apply_sign_deadzone GC_CSTICK_Y
+    bcf    STATUS, C                ; Divide by 2 to fit N64 positive axis values.
+    rrcf   gamecube_buffer + GC_L_ANALOG, f
+    bcf    STATUS, C
+    rrcf   gamecube_buffer + GC_R_ANALOG, f
+
+    apply_sign_deadzone GC_JOYSTICK_X, 1
+    apply_sign_deadzone GC_JOYSTICK_Y, 1
+    apply_sign_deadzone GC_CSTICK_X, 1
+    apply_sign_deadzone GC_CSTICK_Y, 1
+    apply_sign_deadzone GC_L_ANALOG, 0
+    apply_sign_deadzone GC_R_ANALOG, 0
 
     call    check_remap_combo       ; Must be after calibration, since it uses analog L and R values
 
@@ -472,12 +490,16 @@ n64_translate_status
     map_axis_from       GC_CSTICK_X,  BTN_C_RIGHT
     map_axis_from       GC_CSTICK_Y,  BTN_C_DOWN
     map_axis_from       GC_CSTICK_Y,  BTN_C_UP
+    map_axis_from       GC_R_ANALOG,  BTN_AR
+    map_axis_from       GC_L_ANALOG,  BTN_AL
 
     bsf     FLAG_AXIS
-    map_button_axis     GC_JOYSTICK_X, BTN_J_LEFT, BTN_J_RIGHT, AXIS_BTN_THRS
-    map_button_axis     GC_JOYSTICK_Y, BTN_J_DOWN, BTN_J_UP, AXIS_BTN_THRS
-    map_button_axis     GC_CSTICK_X, BTN_C_LEFT, BTN_C_RIGHT, AXIS_BTN_THRS
-    map_button_axis     GC_CSTICK_Y, BTN_C_DOWN, BTN_C_UP, AXIS_BTN_THRS
+    map_button_axis_sign     GC_JOYSTICK_X, BTN_J_LEFT, BTN_J_RIGHT, AXIS_BTN_THRS
+    map_button_axis_sign     GC_JOYSTICK_Y, BTN_J_DOWN, BTN_J_UP, AXIS_BTN_THRS
+    map_button_axis_sign     GC_CSTICK_X, BTN_C_LEFT, BTN_C_RIGHT, AXIS_BTN_THRS
+    map_button_axis_sign     GC_CSTICK_Y, BTN_C_DOWN, BTN_C_UP, AXIS_BTN_THRS
+    map_button_axis          GC_R_ANALOG, BTN_AR, TRIGGER_BTN_THRS
+    map_button_axis          GC_L_ANALOG, BTN_AL, TRIGGER_BTN_THRS
     bcf     FLAG_AXIS
 
     btfsc   FLAG_NO_VIRTUAL_BTNS
@@ -577,9 +599,9 @@ check_remap_combo
     ;; Key combinations require that the L and R buttons be mostly pressed.
     ;; but that the end stop buttons aren't pressed.
     ;; Ensure the high bit of each axis is set and that the buttons are cleared.
-    btfss   gamecube_buffer + GC_L_ANALOG, 7
+    btfss   gamecube_buffer + GC_L_ANALOG, 6
     return
-    btfss   gamecube_buffer + GC_R_ANALOG, 7
+    btfss   gamecube_buffer + GC_R_ANALOG, 6
     return
     btfsc   gamecube_buffer + GC_L
     return

@@ -50,25 +50,28 @@
     #define BTN_X       0x02
     #define BTN_Y       0x03
     #define BTN_Z       0x04
-    #define BTN_R       0x05
-    #define BTN_L       0x06
-    #define BTN_START   0x07
-    #define BTN_D_LEFT  0x08
-    #define BTN_D_RIGHT 0x09
-    #define BTN_D_DOWN  0x0A
-    #define BTN_D_UP    0x0B
-    #define BTN_C_LEFT  0x0C
-    #define BTN_C_RIGHT 0x0D
-    #define BTN_C_DOWN  0x0E
-    #define BTN_C_UP    0x0F
-    #define BTN_J_LEFT  0x10
-    #define BTN_J_RIGHT 0x11
-    #define BTN_J_DOWN  0x12
-    #define BTN_J_UP    0x13
+    #define BTN_AR      0x05
+    #define BTN_R       0x06
+    #define BTN_AL      0x07
+    #define BTN_L       0x08
+    #define BTN_START   0x09
+    #define BTN_D_LEFT  0x0A
+    #define BTN_D_RIGHT 0x0B
+    #define BTN_D_DOWN  0x0C
+    #define BTN_D_UP    0x0D
+    #define BTN_C_LEFT  0x0E
+    #define BTN_C_RIGHT 0x0F
+    #define BTN_C_DOWN  0x10
+    #define BTN_C_UP    0x11
+    #define BTN_J_LEFT  0x12
+    #define BTN_J_RIGHT 0x13
+    #define BTN_J_DOWN  0x14
+    #define BTN_J_UP    0x15
 
     #define AXIS_DEAD_ZONE      0x0A
     #define AXIS_BTN_THRS       0x30
     #define AXIS_BTN_VALUE      0x54
+    #define TRIGGER_BTN_THRS    0x18
 
     ;; Buttons layout addresses.
     #define EEPROM_LAYOUT_SIZE  0x20
