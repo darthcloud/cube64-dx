@@ -1,5 +1,5 @@
     ;;
-    ;; N64 and Gamecube controller port communications macros
+    ;; N64 and GameCube controller port communications macros
     ;; Copyright (C) 2004 Micah Dowty <micah@navi.cx>
     ;;               2011 Jacques Gagnon <darthcloud@gmail.com>
     ;;
@@ -8,17 +8,16 @@
     ;;   the Free Software Foundation; either version 2 of the License, or
     ;;   (at your option) any later version.
     ;;
-    ;; This firmware is designed to run on a mid-range PIC microcontroller
-    ;; clocked at 20 MHz. The macros herein let you transmit and receive
+    ;; This firmware is designed to run on a high-end PIC microcontroller
+    ;; clocked at 64 MHz. The macros herein let you transmit and receive
     ;; arbitrary-sized buffers of data using the low-level encoding used
-    ;; by the N64 and Gamecube. Even though all timing here refers to a
-    ;; 20 MHz clock, it can be adjusted for 24 MHz by #define'ing N64GC_CLOCK_24
+    ;; by the N64 and GameCube.
     ;;
     ;; Additionally, this header includes #defines related to the higher-level
     ;; bits of the protocol.
     ;;
     ;; This wouldn't have been possible without all the effort already
-    ;; poured into reverse engineering the N64 and Gamecube by others.
+    ;; poured into reverse engineering the N64 and GameCube by others.
     ;; The author found these resources particularly helpful:
     ;;
     ;;   http://www.int03.co.uk/crema/hardware/gamecube/gc-control.htm
@@ -30,7 +29,7 @@
     ;; need to know to trick an N64 into thinking you're a controller. The rest
     ;; of this information was reverse engineered by the author.
     ;;
-    ;; The serial format is the same as that used by the gamecube: zeroes
+    ;; The serial format is the same as that used by the GameCube: zeroes
     ;; are 3us off 1us on, ones are 1us off 3us on. All packets are a multiple
     ;; of 8 bits long not including the single '1' bit used as a stop bit.
     ;; The 0x02 and 0x03 packets use a 2us wide stop bit after the CRC rather
@@ -86,14 +85,32 @@
     ;; Time and Majora's Mask.
     ;;
 
-    ;; It's easy to convert code from 20MHz timing to 24MHz- at 20MHz, we get
-    ;; 5 cycles per microsecond, and at 24MHz we get six. So, if we make sure
-    ;; one instance of this macro is executed each microsecond, this same code
-    ;; should work at either frequency.
-microsecond_pad macro
-#ifdef N64GC_CLOCK_24
+    ;; Temporary using the pad macro to waste the additional time given by
+    ;; using the PIC18F14K22 @ 64 MHz. This waste the 11 additional cycles we
+    ;; get each 1 us.
+pad_11_cycles    macro
+    goto $+4
+    goto $+4
+    goto $+4
+    goto $+4
+    goto $+4
     nop
-#endif
+    endm
+
+pad_10_cycles    macro
+    goto $+4
+    goto $+4
+    goto $+4
+    goto $+4
+    goto $+4
+    endm
+
+pad_9_cycles    macro
+    goto $+4
+    goto $+4
+    goto $+4
+    goto $+4
+    nop
     endm
 
     ;; *******************************************************************************
@@ -108,10 +125,10 @@ microsecond_pad macro
     #define N64_COMMAND_OLD_IDENT   0xFF
 
     ;; Controller pak identities
-    #define N64_PAK_MEMORY      0x00
-    #define N64_PAK_RUMBLE      0x80
+    #define N64_PAK_MEMORY          0x00
+    #define N64_PAK_RUMBLE          0x80
 
-    ;; Gamecube buttons (byte and bit offset in status packet)
+    ;; GameCube buttons (byte and bit offset in status packet)
     #define GC_A        0, 0
     #define GC_B        0, 1
     #define GC_X        0, 2
@@ -125,38 +142,36 @@ microsecond_pad macro
     #define GC_R        1, 5
     #define GC_L        1, 6
 
-    ;; Gamecube axes (byte offset in status packet)
+    ;; GameCube axes (byte offset in status packet)
     #define GC_JOYSTICK_X   2
     #define GC_JOYSTICK_Y   3
-    #define GC_CSTICK_X 4
-    #define GC_CSTICK_Y 5
-    #define GC_L_ANALOG 6
-    #define GC_R_ANALOG 7
+    #define GC_CSTICK_X     4
+    #define GC_CSTICK_Y     5
+    #define GC_L_ANALOG     6
+    #define GC_R_ANALOG     7
 
     ;; N64 buttons (byte and bit offset in status packet)
-    #define N64_D_RIGHT 0, 0
-    #define N64_D_LEFT  0, 1
-    #define N64_D_DOWN  0, 2
-    #define N64_D_UP    0, 3
-    #define N64_START   0, 4
-    #define N64_Z       0, 5
-    #define N64_B       0, 6
-    #define N64_A       0, 7
-    #define N64_C_RIGHT 1, 0
-    #define N64_C_LEFT  1, 1
-    #define N64_C_DOWN  1, 2
-    #define N64_C_UP    1, 3
-    #define N64_R       1, 4
-    #define N64_L       1, 5
+    #define N64_D_RIGHT     0, 0
+    #define N64_D_LEFT      0, 1
+    #define N64_D_DOWN      0, 2
+    #define N64_D_UP        0, 3
+    #define N64_START       0, 4
+    #define N64_Z           0, 5
+    #define N64_B           0, 6
+    #define N64_A           0, 7
+    #define N64_C_RIGHT     1, 0
+    #define N64_C_LEFT      1, 1
+    #define N64_C_DOWN      1, 2
+    #define N64_C_UP        1, 3
+    #define N64_R           1, 4
+    #define N64_L           1, 5
 
     ;; N64 axes (byte offset in status packet)
     #define N64_JOYSTICK_X  2
     #define N64_JOYSTICK_Y  3
 
-
 n64gc_init macro
     ;; Put us back in bank 0 with a bit_count of 8, preconditions for rx_buffer
-    bcf STATUS, RP0
     movlw   8
     movwf   bit_count
     endm
@@ -169,17 +184,16 @@ n64gc_init macro
     ;; Transmit 'w' bytes of data over the indicated pin, starting at IRP:FSR.
     ;; The data is modified as it is transmitted, as we don't have enough time
     ;; to copy each byte to a temporary location. Returns when done. This macro
-    ;; works with the gamecube or N64, as they both use the same low-level protocol.
+    ;; works with the GameCube or N64, as they both use the same low-level protocol.
 n64gc_tx_buffer macro port, bit, wide_stop_bit
     local   bit_loop
     local   not_last_byte
     local   not_last_bit
 
-    bsf STATUS, RP0 ; Stow our count and start looping over bytes
-    movwf   byte_count
+    movwf   byte_count      ; Stow our count and start looping over bytes
 
-    movlw   8       ; Set the bit count for the first time. Subsequently
-    movwf   bit_count   ;   it gets set in the spare cycles below.
+    movlw   8               ; Set the bit count for the first time. Subsequently
+    movwf   bit_count       ; it gets set in the spare cycles below.
 
     ;; Each bit always takes 4us, but there are several possible control paths...
     ;; Every line has been numbered with the number of microseconds since the
@@ -188,68 +202,68 @@ n64gc_tx_buffer macro port, bit, wide_stop_bit
     ;; for the next bit. This is implemented in the form of three alternate endings
     ;; for the loop.
 bit_loop
-    microsecond_pad
-    rlf INDF, f     ; 3.8us  Rotate the next bit into C
-    bcf port, bit   ; 0.0us  The falling edge begins another bit
-    goto    $+1     ; 0.2us
-    nop         ; 0.6us
-    microsecond_pad
-    btfsc   STATUS, C   ; 0.8us  Our bit is in the C flag...
-    bsf port, bit   ; 1.0us  Rising edge for 1 bits
-    decfsz  bit_count, f    ; 1.2us  Is this the last bit?
-    goto    not_last_bit    ; 1.4us  We have an alternate ending for the last bit...
+    pad_11_cycles           ; 3.1875us
+    nop                     ; 3.8750us
+    rlcf    INDF1, f, 0     ; 3.9375us  Rotate the next bit into C
+    bcf     port, bit, 0    ; 0.0000us  The falling edge begins another bit
+    goto    $+4             ; 0.0625us
+    nop                     ; 0.1875us
+    pad_11_cycles           ; 0.2500us
+    btfsc   STATUS, C, 0    ; 0.9375us  Our bit is in the C flag...
+    bsf     port, bit, 0    ; 1.0000us  Rising edge for 1 bits
+    decfsz  bit_count, f    ; 1.0625us  Is this the last bit?
+    goto    not_last_bit    ; 1.1250us  We have an alternate ending for the last bit...
+    ;; nop (goto 2nd word)  ; 1.1875us
 
-    decfsz  byte_count,f    ; 1.6us  Is this the last byte?
-    goto    not_last_byte   ; 1.8us  Yet another alternate ending for the last byte...
+    decfsz  byte_count,f    ; 1.2500us  Is this the last byte?
+    goto    not_last_byte   ; 1.3125us  Yet another alternate ending for the last byte...
+    ;; nop (goto 2nd word)  ; 1.3750us
 
-    microsecond_pad
-    goto    $+1     ; 2.0us
-    goto    $+1     ; 2.4us
-    microsecond_pad
-    btfss   STATUS, C   ; 2.8us
-    bsf port, bit   ; 3.0us  Rising edge for 0 bits
-    goto    $+1     ; 3.2us
-    goto    $+1     ; 3.6us
-    microsecond_pad
-    bcf port, bit   ; 0.0us  Begin a stop bit
-    bcf STATUS, RP0 ; 0.2us  Always leave in bank 0
-    nop         ; 0.4us
-    microsecond_pad
-    movlw   8       ; 0.6us  Setup for the next receive
-    movwf   bit_count   ; 0.8us
+    pad_11_cycles           ; 1.4375us
+    goto    $+4             ; 2.1250us
+    pad_11_cycles           ; 2.2500us
+    btfss   STATUS, C, 0    ; 2.9375us
+    bsf     port, bit, 0    ; 3.0000us  Rising edge for 0 bits
+    goto    $+4             ; 3.0625us
+    pad_11_cycles           ; 3.1875us
+    goto    $+4             ; 3.8750us
+    bcf     port, bit, 0    ; 0.0000us  Begin a stop bit
+    pad_11_cycles           ; 0.0625us
+    movlw   8               ; 0.7500us  Setup for the next receive
+    movwf   bit_count       ; 0.8125us
+    goto    $+4             ; 0.8750us
 
-    if  wide_stop_bit
-    goto    $+1     ; Use a 2us stop bit rather than 1us, waste 5 cycles
-    goto    $+1
-    nop
+    if wide_stop_bit
+        goto    $+4         ; Use a 2us stop bit rather than 1us, waste 16 cycles
+        goto    $+4
+        nop
+        pad_11_cycles
     endif
 
-    bsf port, bit   ; 1.0us  Rising edge for the stop bit
-    return          ; 1.2us  Done for now. The first instruction after the
-                ;        macro is at 1.6us after the beginning of the
-                ;        stop bit, so it ends 2.4us after we return.
+    bsf     port, bit, 0    ; 1.0000us  Rising edge for the stop bit
+    return                  ; 1.0625us  Done for now. The first instruction after the
+                            ; macro is at 1.6us after the beginning of the
+                            ; stop bit, so it ends 2.4us after we return.
 
-not_last_byte
-    microsecond_pad
-    microsecond_pad
-    incf    FSR, f      ; 2.2us  Point at the next byte
-    movlw   8       ; 2.4us  Reinitialize the bit counter
-    movwf   bit_count   ; 2.6us
-    btfss   STATUS, C   ; 2.8us
-    bsf port, bit   ; 3.0us  Rising edge for 0 bits
-    nop         ; 3.2us
-    goto    bit_loop    ; 3.4us
+not_last_byte               ; 1.3750us
+    pad_10_cycles           ; 1.4375us
+    pad_11_cycles           ; 2.0625us
+    incf    FSR1L, f, 0     ; 2.7500us  Point at the next byte
+    movlw   8               ; 2.8125us  Reinitialize the bit counter
+    movwf   bit_count       ; 2.8750us
+    btfss   STATUS, C, 0    ; 2.9375us
+    bsf     port, bit, 0    ; 3.0000us  Rising edge for 0 bits
+    goto    bit_loop        ; 3.0625us
 
-not_last_bit
-    microsecond_pad
-    microsecond_pad
-    goto    $+1     ; 1.8us
-    goto    $+1     ; 2.2us
-    nop         ; 2.6us
-    btfss   STATUS, C   ; 2.8us
-    bsf port, bit   ; 3.0us  Rising edge for 0 bits
-    nop         ; 3.2us
-    goto    bit_loop    ; 3.4us  Next bit...
+not_last_bit                ; 1.1875us
+    pad_11_cycles           ; 1.2500us
+    pad_11_cycles           ; 1.9375us
+    goto    $+4             ; 2.6250us
+    goto    $+4             ; 2.7500us
+    nop                     ; 2.8750us
+    btfss   STATUS, C, 0    ; 2.9375us
+    bsf     port, bit, 0    ; 3.0000us  Rising edge for 0 bits
+    goto    bit_loop        ; 3.0625us  Next bit...
     endm
 
 
@@ -271,61 +285,61 @@ n64gc_rx_buffer macro port, bit, byte_count, clear_watchdog
     local   bit_loop
     local   not_last_bit
     local   not_last_byte
-    local   edge_det_1
-    local   edge_det_2
 
     ;; We poll for the low state signalling the beginning of a bit, time out 2us
     ;; (putting us right in the middle of the bit) and then sample. This probably isn't
     ;; how the GC/N64 hardware decodes the received data, but it's close enough.
     ;;
     ;; The overhead from sampling to the beginning of the next poll needs to
-    ;; be less than 2us (10 cycles)
+    ;; be less than 2us (32 cycles)
 bit_loop
-    microsecond_pad
-    if  clear_watchdog
-    clrwdt
+    if clear_watchdog
+        clrwdt
     endif
 
-    btfsc   port, bit   ; 0.0us  Poll for the beginning of the bit, max 0.6us jitter
-    goto    bit_loop    ; 0.2us
-    microsecond_pad
-    rlf INDF, f     ; 0.4us  Make room for the new bit
-    bcf INDF, 0     ; 0.6us  Assume it's 0 to begin with
-    decfsz  bit_count, f    ; 0.8us  Is this the last bit?
-    goto    not_last_bit    ; 1.0us  We have an alternate ending for the last bit...
+    btfsc   port, bit, 0    ; 0.0000us  Poll for the beginning of the bit, max 0.1875us jitter
+    goto    bit_loop        ; 0.0625us
+    ;; nop (goto 2nd word)  ; 0.1250us
+    pad_10_cycles           ; 0.1875us
+    rlcf    INDF1, f, 0     ; 0.8125us  Make room for the new bit
+    bcf     INDF1, 0, 0     ; 0.8750us  Assume it's 0 to begin with
+    decfsz  bit_count, f    ; 0.9375us  Is this the last bit?
+    goto    not_last_bit    ; 1.0000us  We have an alternate ending for the last bit...
+    ;; nop (goto 2nd word)  ; 1.0625us
 
-    decfsz  byte_count,f    ; 1.2us  Is this the last byte?
-    goto    not_last_byte   ; 1.4us  Yet another alternate ending for the last byte...
+    decfsz  byte_count,f    ; 1.1250us  Is this the last byte?
+    goto    not_last_byte   ; 1.1875us  Yet another alternate ending for the last byte...
+    ;; nop (goto 2nd word)  ; 1.2500us
 
-    movlw   8       ; 1.6us  Reset bit count
-    movwf   bit_count   ; 1.8us
-    microsecond_pad
-    btfsc   port, bit   ; 2.0us  Sample the incoming bit
-    bsf INDF, 0     ; 2.2us
-    return
+    movlw   8               ; 1.3125us  Reset bit count
+    movwf   bit_count       ; 1.3750us
+    pad_9_cycles            ; 1.4375us
+    btfsc   port, bit, 0    ; 2.0000us  Sample the incoming bit
+    bsf     INDF1, 0, 0     ; 2.0625us
+    return                  ; 2.1250us
 
-not_last_byte
-    microsecond_pad
-    movlw   8       ; 1.8us
-    btfsc   port, bit   ; 2.0us  Sample the incoming bit
-    bsf INDF, 0     ; 2.2us
-    incf    FSR, f      ; 2.4us  Next byte...
-    movwf   bit_count   ; 2.6us  Reset bit count
-    microsecond_pad
-    btfsc   port, bit   ; 2.8us  Wait for the data line to go back high
-    goto    bit_loop    ; 3.0us
-    goto    $-2     ; 3.2us
+not_last_byte               ; 1.2500us
+    pad_10_cycles           ; 1.3125us
+    movlw   8               ; 1.9375us
+    btfsc   port, bit, 0    ; 2.0000us  Sample the incoming bit
+    bsf     INDF1, 0, 0     ; 2.0625us
+    incf    FSR1L, f, 0     ; 2.1250us  Next byte...
+    movwf   bit_count       ; 2.1875us  Reset bit count
+    btfsc   port, bit, 0    ; 2.2500us  Wait for the data line to go back high
+    goto    bit_loop        ; 2.3125us
+    ;; nop (goto 2nd word)  ; 2.3750us
+    goto    $-6             ; 2.4375us
 
-not_last_bit
-    microsecond_pad
-    nop         ; 1.4us
-    goto    $+1     ; 1.6us
-    btfsc   port, bit   ; 2.0us  Sample the incoming bit
-    bsf INDF, 0     ; 2.2us
-    microsecond_pad
-    btfsc   port, bit   ; 2.4us  Wait for the data line to go back high
-    goto    bit_loop    ; 2.6us
-    goto    $-2     ; 2.8us
+not_last_bit                ; 1.0625us
+    pad_11_cycles           ; 1.1250us
+    nop                     ; 1.8125us
+    goto    $+4             ; 1.8750us
+    btfsc   port, bit, 0    ; 2.0000us  Sample the incoming bit
+    bsf     INDF1, 0, 0     ; 2.0625us
+    btfsc   port, bit, 0    ; 2.1250us  Wait for the data line to go back high
+    goto    bit_loop        ; 2.1875us
+    ;; nop (goto 2nd word)  ; 2.2500us
+    goto    $-6             ; 2.3125us
     endm
 
     ;;; The End ;;;
