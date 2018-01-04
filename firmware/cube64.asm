@@ -523,9 +523,6 @@ set_virtual_button
     map_button_to   BTN_D_DOWN,     N64_D_DOWN
     map_button_to   BTN_D_UP,       N64_D_UP
 
-    map_button_to   BTN_X,          N64_C_DOWN
-    map_button_to   BTN_Y,          N64_B
-
     map_button_to   BTN_START,      N64_START
     map_button_to   BTN_RZ,         N64_Z
     map_button_to   BTN_B,          N64_B
@@ -793,10 +790,17 @@ validate_eeprom
 
     ;; Write an identity mapping and a valid magic word to the EEPROM.
 reset_eeprom
+    movlw   upper eeprom_default    ; Load address for EEPROM layout default.
+    movwf   TBLPTRU
+    movlw   high eeprom_default
+    movwf   TBLPTRH
+
     movlw   EEPROM_LAYOUT_0         ; Loop over all virtual buttons, writing the identity mapping.
     movwf   EEADR
 next_eeprom_bank
-    clrf    EEDATA
+    clrf    TBLPTRL
+    TBLRD*
+    movff   TABLAT, EEDATA
     call    reset_next_byte
     movf    EEADR, w
     xorlw   EEPROM_LAYOUT_0 + EEPROM_LAYOUT_SIZE * 4
@@ -822,16 +826,24 @@ next_eeprom_bank
 
     ;; Reset only data relative to the current active button mapping layout.
 reset_active_eeprom_layout
+    movlw   upper eeprom_default    ; Load address for EEPROM layout default.
+    movwf   TBLPTRU
+    movlw   high eeprom_default
+    movwf   TBLPTRH
+    clrf    TBLPTRL
+
     movf    active_key_map, w
     movwf   EEADR
-    clrf    EEDATA
+    TBLRD*
+    movff   TABLAT, EEDATA
 
     ;; Reset to default all button beginning at the current address set.
 reset_next_byte
     call    eewrite
     incf    EEADR, f
-    incf    EEDATA, f
-    movf    EEDATA, w
+    TBLRD+*
+    movff   TABLAT, EEDATA
+    movf    TBLPTRL, w
     xorlw   EEPROM_LAYOUT_SIZE
     btfss   STATUS, Z
     goto    reset_next_byte
@@ -899,6 +911,11 @@ n64_wfc_empty_buffer
 
     ;; Service commands coming in from the N64
 n64_wait_for_command
+    movlw   upper crc_large_table   ; Preload CRC table upper & high address bytes.
+    movwf   TBLPTRU
+    movlw   high crc_large_table
+    movwf   TBLPTRH
+
     call    n64_wait_for_idle   ; Ensure the line is idle first, so we don't jump in to the middle of a command
 
     movlw   n64_command         ; Receive 1 command byte
@@ -1175,6 +1192,12 @@ gamecube_rx
     ;; *******************************************************************************
     ;; ******************************************************  Lookup Tables  ********
     ;; *******************************************************************************
+
+    ;; This contain the default configuration used if the EEPROM is empty, corrupt or
+    ;; user perform reset.
+    org     0x3E00
+eeprom_default
+    #include eeprom_default.inc
 
     ;; 256-byte table extracted from the test vectors, that can be used to
     ;; compute any CRC. This table is the inverted CRC generated for every
