@@ -59,9 +59,15 @@
     #define BTN_C_DOWN  0x0E
     #define BTN_C_UP    0x0F
 
-    #define NUM_VIRTUAL_BUTTONS 0x10
-    #define NUM_EEPROM_DATA     0x40
     #define AXIS_DEAD_ZONE      0x0A
+
+    ;; Buttons layout addresses.
+    #define EEPROM_LAYOUT_SIZE  0x10
+    #define EEPROM_LAYOUT_0     0x00
+    #define EEPROM_LAYOUT_1     EEPROM_LAYOUT_0 + EEPROM_LAYOUT_SIZE
+    #define EEPROM_LAYOUT_2     EEPROM_LAYOUT_1 + EEPROM_LAYOUT_SIZE
+    #define EEPROM_LAYOUT_3     EEPROM_LAYOUT_2 + EEPROM_LAYOUT_SIZE
+    #define EEPROM_LAST_KEY_MAP EEPROM_LAYOUT_3 + EEPROM_LAYOUT_SIZE
 
     ;; Magic word and the address it should be in the EEPROM,
     ;; as a big-endian 16-bit value.
@@ -72,7 +78,6 @@
     ;; Change this value if the EEPROM data format changes.
     ;;
 
-    #define EEPROM_MAGIC_WORD   0xEC70
-    #define EEPROM_MAGIC_ADDR   0x40
-    #define EEPROM_LAST_KEY_MAP 0x50
+    #define EEPROM_MAGIC_WORD   0xAC0F
+    #define EEPROM_MAGIC_ADDR   EEPROM_LAST_KEY_MAP + 1
 

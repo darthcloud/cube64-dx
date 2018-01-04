@@ -128,6 +128,7 @@ pll_startup_delay macro
 
 startup
     movlb   0x00                    ; Set bank 0 active.
+    bcf     INTCON, GIE             ; Disable interrupts.
     movlw   0x70                    ; Set internal clock to 16 MHz.
     movwf   OSCCON
     pll_startup_delay               ; Wait for PLL to shift frequency to 64 MHz.
@@ -143,8 +144,9 @@ startup
     clrf    config_flags
     clrf    calibration_count
     clrf    rumble_feedback_count
-    clrf    active_key_map
     clrf    FSR1H                   ; We only need to access first bank, so we set it in FSR high byte right away.
+    movlw   EEPROM_LAYOUT_0
+    movwf   active_key_map
 
     ;; Set controller id to occupied slot.
     movlw   0x01
@@ -542,28 +544,28 @@ pressed_mode_rumble
     ;; Load custom up.
 pressed_preset_up
     bsf     FLAG_WAITING_FOR_RELEASE
-    movlw   0x00
+    movlw   EEPROM_LAYOUT_0
     movwf   active_key_map
     goto    save_active_key_layout
 
     ;; Load custom layout left.
 pressed_preset_left
     bsf     FLAG_WAITING_FOR_RELEASE
-    movlw   0x10
+    movlw   EEPROM_LAYOUT_1
     movwf   active_key_map
     goto    save_active_key_layout
 
     ;; Load custom layout right.
 pressed_preset_right
     bsf     FLAG_WAITING_FOR_RELEASE
-    movlw   0x20
+    movlw   EEPROM_LAYOUT_2
     movwf   active_key_map
     goto    save_active_key_layout
 
     ;; Load custom layout down.
 pressed_preset_down
     bsf     FLAG_WAITING_FOR_RELEASE
-    movlw   0x30
+    movlw   EEPROM_LAYOUT_3
     movwf   active_key_map
 
     ;; Save last used preset in EEPROM.
@@ -652,12 +654,13 @@ validate_eeprom
 
     ;; Write an identity mapping and a valid magic word to the EEPROM.
 reset_eeprom
-    clrf    EEADR                   ; Loop over all virtual buttons, writing the identity mapping
+    movlw   EEPROM_LAYOUT_0         ; Loop over all virtual buttons, writing the identity mapping.
+    movwf   EEADR
 next_eeprom_bank
     clrf    EEDATA
     call    reset_next_byte
     movf    EEADR, w
-    xorlw   NUM_EEPROM_DATA
+    xorlw   EEPROM_LAYOUT_0 + EEPROM_LAYOUT_SIZE * 4
     btfss   STATUS, Z
     goto    next_eeprom_bank
 
@@ -690,7 +693,7 @@ reset_next_byte
     incf    EEADR, f
     incf    EEDATA, f
     movf    EEDATA, w
-    xorlw   NUM_VIRTUAL_BUTTONS
+    xorlw   EEPROM_LAYOUT_SIZE
     btfss   STATUS, Z
     goto    reset_next_byte
     return
@@ -708,6 +711,7 @@ eeread
     ;; Write to the EEPROM using the current EEADR and EEDATA values,
     ;; block until the write is complete.
 eewrite
+    clrwdt
     bcf     EECON1, EEPGD       ; Select EEPROM.
     bcf     EECON1, CFGS
     bsf     EECON1, WREN        ; Enable write
