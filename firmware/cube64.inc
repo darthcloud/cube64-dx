@@ -51,29 +51,47 @@
     ;; translating from GameCube to N64. These IDs are used as indices into the remapping
     ;; table stored in our on-chip EEPROM.
 
-    #define BTN_A       0x00
-    #define BTN_B       0x01
-    #define BTN_X       0x02
-    #define BTN_Y       0x03
-    #define BTN_Z       0x04
-    #define BTN_AR      0x05
-    #define BTN_R       0x06
-    #define BTN_AL      0x07
-    #define BTN_L       0x08
-    #define BTN_START   0x09
-    #define BTN_D_RIGHT 0x0A
-    #define BTN_D_DOWN  0x0B
-    #define BTN_D_UP    0x0C
-    #define BTN_D_LEFT  0x0D
-    #define BTN_C_LEFT  0x0E
-    #define BTN_C_RIGHT 0x0F
-    #define BTN_C_DOWN  0x10
-    #define BTN_C_UP    0x11
-    #define BTN_J_LEFT  0x12
-    #define BTN_J_RIGHT 0x13
-    #define BTN_J_DOWN  0x14
-    #define BTN_J_UP    0x15
-    #define BTN_NONE    0x7F
+    cblock 0x00
+        ;; Setup directional values so that 2 LSB are: up=0, left=1, right=2, down=3.
+        ;; Also positive direction (up, right) has LSB clear while negative direction
+        ;; (left, down) has LSB set.
+        BTN_D_UP
+        BTN_D_LEFT
+        BTN_D_RIGHT
+        BTN_D_DOWN
+        BTN_LJ_UP
+        BTN_LJ_LEFT
+        BTN_LJ_RIGHT
+        BTN_LJ_DOWN
+        BTN_RJ_UP
+        BTN_RJ_LEFT
+        BTN_RJ_RIGHT
+        BTN_RJ_DOWN
+
+        ;; Setup analog triggers so their LSB is clear since they are positive axes
+        ;; and make sure both analog trigger has only 1 bit different (2nd bit).
+        BTN_LA
+        BTN_L
+        BTN_RA
+        BTN_R
+        BTN_LZ
+        BTN_LG
+        BTN_LJ
+        BTN_RZ
+        BTN_RG
+        BTN_RJ
+
+        BTN_A
+        BTN_B
+        BTN_X
+        BTN_Y
+
+        BTN_SELECT
+        BTN_HOME
+        BTN_START
+        BTN_C
+        BTN_NONE
+    endc
 
     #define LAYOUT_MASK         0x03
     #define BTN_MASK            0x1F
@@ -86,7 +104,7 @@
     #define TRIGGER_BTN_THRS    0x18
 
     ;; Buttons layout addresses.
-    #define EEPROM_LAYOUT_SIZE  0x20
+    #define EEPROM_LAYOUT_SIZE  BTN_NONE
     #define EEPROM_LAYOUT_0     0x00
     #define EEPROM_LAYOUT_1     EEPROM_LAYOUT_0 + EEPROM_LAYOUT_SIZE
     #define EEPROM_LAYOUT_2     EEPROM_LAYOUT_1 + EEPROM_LAYOUT_SIZE

@@ -369,9 +369,9 @@ map_axis_from macro src_byte, virtual
     movff   gamecube_buffer + src_byte, temp2
     movlw   virtual
     if virtual & 0x01               ; Check direction (sign) of the virtual button.
-        btfss   temp2, 7            ; Virtual button is positive, skip if buffer negative.
-    else
         btfsc   temp2, 7            ; Virtual button is negative, skip if buffer positive.
+    else
+        btfss   temp2, 7            ; Virtual button is positive, skip if buffer negative.
     endif
     call    remap_virtual_axis      ; Call if buffer sign match virtual button sign.
     endm
@@ -386,9 +386,9 @@ map_axis_to macro virtual, dest_byte
     btfss   STATUS, Z
     goto    next
     if virtual & 0x01               ; Check direction (sign) of the virtual button.
-        btfsc   temp2, 7            ; Virtual button is positive, skip if buffer positive.
-    else
         btfss   temp2, 7            ; Virtual button is negative, skip if buffer negative.
+    else
+        btfsc   temp2, 7            ; Virtual button is positive, skip if buffer positive.
     endif
     negf    temp2                   ; Two's complement buffer if sign mismatch.
     assign_greater_abs_value temp2, n64_status_buffer + dest_byte
@@ -432,9 +432,9 @@ map_axis_button macro virtual, dest_byte
     btfss   STATUS, Z
     goto    next
     if virtual & 0x01                       ; Set value sign base on virtual button sign.
-        movlw   AXIS_BTN_VALUE
-    else
         movlw   -AXIS_BTN_VALUE
+    else
+        movlw   AXIS_BTN_VALUE
     endif
     movwf   n64_status_buffer + dest_byte   ; Could be overwritten by a real axis.
 next
@@ -477,7 +477,7 @@ n64_translate_restart
 
     map_button_from     GC_A,       BTN_A
     map_button_from     GC_B,       BTN_B
-    map_button_from     GC_Z,       BTN_Z
+    map_button_from     GC_Z,       BTN_RZ
     map_button_from     GC_R,       BTN_R
     map_button_from     GC_L,       BTN_L
     map_button_from     GC_START,   BTN_START
@@ -490,24 +490,24 @@ n64_translate_restart
     map_button_from     GC_D_UP,    BTN_D_UP
     map_button_from     GC_D_DOWN,  BTN_D_DOWN
 
-    map_axis_from       GC_JOYSTICK_X,  BTN_J_LEFT
-    map_axis_from       GC_JOYSTICK_X,  BTN_J_RIGHT
-    map_axis_from       GC_JOYSTICK_Y,  BTN_J_DOWN
-    map_axis_from       GC_JOYSTICK_Y,  BTN_J_UP
-    map_axis_from       GC_CSTICK_X,  BTN_C_LEFT
-    map_axis_from       GC_CSTICK_X,  BTN_C_RIGHT
-    map_axis_from       GC_CSTICK_Y,  BTN_C_DOWN
-    map_axis_from       GC_CSTICK_Y,  BTN_C_UP
-    map_axis_from       GC_R_ANALOG,  BTN_AR
-    map_axis_from       GC_L_ANALOG,  BTN_AL
+    map_axis_from       GC_JOYSTICK_X,  BTN_LJ_LEFT
+    map_axis_from       GC_JOYSTICK_X,  BTN_LJ_RIGHT
+    map_axis_from       GC_JOYSTICK_Y,  BTN_LJ_DOWN
+    map_axis_from       GC_JOYSTICK_Y,  BTN_LJ_UP
+    map_axis_from       GC_CSTICK_X,  BTN_RJ_LEFT
+    map_axis_from       GC_CSTICK_X,  BTN_RJ_RIGHT
+    map_axis_from       GC_CSTICK_Y,  BTN_RJ_DOWN
+    map_axis_from       GC_CSTICK_Y,  BTN_RJ_UP
+    map_axis_from       GC_R_ANALOG,  BTN_RA
+    map_axis_from       GC_L_ANALOG,  BTN_LA
 
     bsf     FLAG_AXIS
-    map_button_axis_sign     GC_JOYSTICK_X, BTN_J_LEFT, BTN_J_RIGHT, AXIS_BTN_THRS
-    map_button_axis_sign     GC_JOYSTICK_Y, BTN_J_DOWN, BTN_J_UP, AXIS_BTN_THRS
-    map_button_axis_sign     GC_CSTICK_X, BTN_C_LEFT, BTN_C_RIGHT, AXIS_BTN_THRS
-    map_button_axis_sign     GC_CSTICK_Y, BTN_C_DOWN, BTN_C_UP, AXIS_BTN_THRS
-    map_button_axis          GC_R_ANALOG, BTN_AR, TRIGGER_BTN_THRS
-    map_button_axis          GC_L_ANALOG, BTN_AL, TRIGGER_BTN_THRS
+    map_button_axis_sign     GC_JOYSTICK_X, BTN_LJ_LEFT, BTN_LJ_RIGHT, AXIS_BTN_THRS
+    map_button_axis_sign     GC_JOYSTICK_Y, BTN_LJ_DOWN, BTN_LJ_UP, AXIS_BTN_THRS
+    map_button_axis_sign     GC_CSTICK_X, BTN_RJ_LEFT, BTN_RJ_RIGHT, AXIS_BTN_THRS
+    map_button_axis_sign     GC_CSTICK_Y, BTN_RJ_DOWN, BTN_RJ_UP, AXIS_BTN_THRS
+    map_button_axis          GC_R_ANALOG, BTN_RA, TRIGGER_BTN_THRS
+    map_button_axis          GC_L_ANALOG, BTN_LA, TRIGGER_BTN_THRS
     bcf     FLAG_AXIS
 
     btfsc   FLAG_NO_VIRTUAL_BTNS
@@ -527,31 +527,31 @@ set_virtual_button
     map_button_to   BTN_Y,          N64_B
 
     map_button_to   BTN_START,      N64_START
-    map_button_to   BTN_Z,          N64_Z
+    map_button_to   BTN_RZ,         N64_Z
     map_button_to   BTN_B,          N64_B
     map_button_to   BTN_A,          N64_A
     map_button_to   BTN_R,          N64_R
     map_button_to   BTN_L,          N64_L
 
-    map_button_to   BTN_C_RIGHT,    N64_C_RIGHT
-    map_button_to   BTN_C_LEFT,     N64_C_LEFT
-    map_button_to   BTN_C_DOWN,     N64_C_DOWN
-    map_button_to   BTN_C_UP,       N64_C_UP
+    map_button_to   BTN_RJ_RIGHT,   N64_C_RIGHT
+    map_button_to   BTN_RJ_LEFT,    N64_C_LEFT
+    map_button_to   BTN_RJ_DOWN,    N64_C_DOWN
+    map_button_to   BTN_RJ_UP,      N64_C_UP
 
     btfsc   FLAG_AXIS
     return
 
-    map_axis_button BTN_J_RIGHT,    N64_JOYSTICK_X
-    map_axis_button BTN_J_LEFT,     N64_JOYSTICK_X
-    map_axis_button BTN_J_DOWN,     N64_JOYSTICK_Y
-    map_axis_button BTN_J_UP,       N64_JOYSTICK_Y
+    map_axis_button BTN_LJ_RIGHT,   N64_JOYSTICK_X
+    map_axis_button BTN_LJ_LEFT,    N64_JOYSTICK_X
+    map_axis_button BTN_LJ_DOWN,    N64_JOYSTICK_Y
+    map_axis_button BTN_LJ_UP,      N64_JOYSTICK_Y
     return
 
 set_virtual_axis
-    map_axis_to     BTN_J_LEFT,     N64_JOYSTICK_X
-    map_axis_to     BTN_J_RIGHT,    N64_JOYSTICK_X
-    map_axis_to     BTN_J_DOWN,     N64_JOYSTICK_Y
-    map_axis_to     BTN_J_UP,       N64_JOYSTICK_Y
+    map_axis_to     BTN_LJ_LEFT,    N64_JOYSTICK_X
+    map_axis_to     BTN_LJ_RIGHT,   N64_JOYSTICK_X
+    map_axis_to     BTN_LJ_DOWN,    N64_JOYSTICK_Y
+    map_axis_to     BTN_LJ_UP,      N64_JOYSTICK_Y
     return
 
     ;; *******************************************************************************
