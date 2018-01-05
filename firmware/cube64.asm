@@ -753,10 +753,11 @@ accept_special_dest
     ;; Validate if one of the D-pad direction is pressed for the layout modifier function.
     ;; Save as a special button if so, return otherwise.
     andlw   ~LAYOUT_MASK        ; Check for any D-pad direction.
-    btfss   STATUS, Z
+    bz      common_accept_dest - 2
+    bcf     FLAG_TRIGGER
     return
-    bsf     EEDATA, SPECIAL_BIT
 
+    bsf     EEDATA, SPECIAL_BIT
 common_accept_dest
     btfsc   FLAG_TRIGGER        ; If flag set, this means we want to allow analog trigger mapping.
     bra     save_mapping
