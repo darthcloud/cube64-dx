@@ -30,6 +30,15 @@
     ;; WaveBird association state.
     #define WAVEBIRD_ASSOCIATED         flags, 6
 
+    ;; Adaptor bypass mode.
+    #define FLAG_BYPASS_MODE            flags, 7
+
+    ;; Flag to force reporting emptied slot.
+    #define FLAG_FORCE_EMPTIED          flags2, 0
+
+    ;; Flag to control menu rumble feedback.
+    #define FLAG_RUMBLE_FEEDBACK        flags2, 1
+
     ;; Set when we are waiting for item selection in the top config menu.
     #define FLAG_TOP_CONFIG_MENU        menu_flags, 0
 

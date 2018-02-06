@@ -43,12 +43,14 @@
         #define N64_TRIS        TRISA, 5
         #define GAMECUBE_PIN    PORTA, 4
         #define GAMECUBE_TRIS   TRISA, 4
+        #define N64C_PIN        PORTA, 2
+        #define N64C_TRIS       TRISA, 2
         #define RAM_START       0x00
 
 io_init macro
         clrf    PORTA
         clrf    WPUA        ; Disable pull-ups.
-        movlw   0x30        ; The two controller pins begin as inputs.
+        movlw   0x34        ; The three pins begin as inputs.
         movwf   TRISA
         clrf    PORTC       ; Debug port
         clrf    TRISC       ; Debug port
@@ -92,12 +94,14 @@ pll_startup_delay macro
         bit_count
         bus_byte_count
         flags
+        flags2
         menu_flags
         virtual_map
         calibration_count
         remap_source_button
         remap_dest_button
         ctrl_slot_status
+        target_slot_status
         active_key_map
         temp_key_map
         crc_work
@@ -142,11 +146,11 @@ startup
 
     n64gc_init
     clrf    flags
+    clrf    flags2
     clrf    menu_flags
     clrf    calibration_count
     clrf    FSR1H                   ; We only need to access first bank, so we set it in FSR high byte right away.
     clrf    active_key_map
-    bsf     INTCON, TMR0IF          ; Set overflow bit for TMR0 to disable rumble feedback.
 
     ;; Set controller id to occupied slot.
     movlw   0x01
@@ -197,15 +201,20 @@ gc_controller_ready
     call    gamecube_poll_status
     call    gamecube_reset_calibration
 
-    ;; Check if user want to disable Rumble Pak emulation on boot.
+    ;; Check if the user wants to disable Rumble Pak emulation on boot.
     btfsc   gamecube_buffer + GC_D_RIGHT
     clrf    ctrl_slot_status
+
+    ;; Check if the user wants to use the bypass mode on boot.
+    btfsc   gamecube_buffer + GC_D_UP
+    bsf     FLAG_BYPASS_MODE
 
     call    n64_translate_status
     call    n64_wait_for_command
 
 main_loop
     call    update_rumble_feedback  ; Give feedback for remapping operations using the rumble motor.
+    call    update_slot_empty_timer ; Report slot empty for 1 s following adaptor mode change.
     call    gamecube_poll_status    ; The GameCube poll takes place during the dead period
     call    n64_translate_status    ; between incoming N64 commands, hopefully.
     call    n64_wait_for_command
@@ -782,15 +791,23 @@ save_mapping
 
     ;; Accept the adapter mode selection.
 accept_mode_select
-    movwf   remap_source_button
+    movwf   target_slot_status
     bsf     FLAG_WAITING_FOR_RELEASE
     bcf     FLAG_MODE_SUBMENU
-    addlw   -1
-    andlw   ~1
-    btfss   STATUS, Z
+
+    movf    target_slot_status, w
+    xorlw   BTN_D_DOWN
+    btfsc   STATUS, Z
     return
 
-    movff   remap_source_button, ctrl_slot_status
+    bsf     FLAG_FORCE_EMPTIED
+    bcf     FLAG_BYPASS_MODE
+
+    movlw   0x02
+    movwf   ctrl_slot_status
+    goto    start_rumble_feedback
+
+accept_adaptor_mode
     goto    start_rumble_feedback
 
     ;; Accept the button layout selection.
@@ -920,6 +937,7 @@ eewrite
     ;; Briefly enable the rumble motor on our own, as feedback during remap combos.
     ;; This use TMR0 in 16-bit mode and will provide feedback for 250 ms.
 start_rumble_feedback
+    bsf     FLAG_RUMBLE_FEEDBACK
     bcf     INTCON, TMR0IF      ; Clear overflow bit.
     movlw   0x87                ; Enable 16-bit mode with 1:256 prescaler.
     movwf   T0CON
@@ -932,14 +950,49 @@ start_rumble_feedback
     ;; At each status poll, turn on the rumble motor if we're in the middle of
     ;; giving feedback.
 update_rumble_feedback
-    btfss   T0CON, TMR0ON
+    btfss   FLAG_RUMBLE_FEEDBACK
     return
     bsf     FLAG_RUMBLE_MOTOR_ON
 
     btfss   INTCON, TMR0IF
     return
-    bcf     FLAG_RUMBLE_MOTOR_ON    ; We need to turn off the motor when we're done
+    bcf     FLAG_RUMBLE_FEEDBACK
+    bcf     FLAG_RUMBLE_MOTOR_ON ; We need to turn off the motor when we're done.
     bcf     T0CON, TMR0ON
+    return
+
+    ;; When switching between adaptor mode, we need to report the controller slot as
+    ;; empty for at least 1 s. Otherwise the N64 wouldn't know we might have changed
+    ;; accessories. The rumble feedback already provide 250 ms. This set TMR0 for
+    ;; another 750 ms.
+start_slot_empty_timer
+    bcf     INTCON, TMR0IF      ; Clear overflow bit.
+    movlw   0x87                ; Enable 16-bit mode with 1:256 prescaler.
+    movwf   T0CON
+    movlw   0x48
+    movwf   TMR0H
+    movlw   0xE4
+    movwf   TMR0L               ; TMR0 now loaded with 0x48E4.
+    return
+
+    ;; Start timer after rumble feedback is done. Then once the timer overflow
+    ;; set the proper slot status and bypass mode.
+update_slot_empty_timer
+    btfss   FLAG_FORCE_EMPTIED
+    return
+    btfsc   FLAG_RUMBLE_FEEDBACK ; Let rumble feedback finish first.
+    return
+    btfss   T0CON, TMR0ON        ; Init timer.
+    call    start_slot_empty_timer
+    btfss   INTCON, TMR0IF
+    return
+
+    bcf     FLAG_FORCE_EMPTIED
+    bcf     T0CON, TMR0ON
+    movf    target_slot_status, w
+    btfsc   STATUS, Z           ; If 0x00 we need to set bypass mode.
+    bsf     FLAG_BYPASS_MODE
+    movff   target_slot_status, ctrl_slot_status
     return
 
 
@@ -968,6 +1021,11 @@ n64_wait_for_command
     movwf   FSR1L
     call    n64_rx_command
 
+ifndef DBG_TRACE
+    btfsc   FLAG_BYPASS_MODE
+endif
+    bra     n64_bypass_mode
+
     ;; We need to handle controller pak writes very fast because there's no pause
     ;; between the initial command byte and the 34 bytes following. Every
     ;; extra instuction here increases the probability of missing the first bit.
@@ -995,6 +1053,8 @@ n64_wait_for_command
     btfsc   STATUS, Z
     goto    n64_bus_read
 
+    bsf     N64C_TRIS               ; Reset bypass bus state.
+
     movf    n64_command, w          ; Check for both identity cmd (0x00 & 0xFF) at the same time.
     btfss   STATUS, Z
     comf    n64_command, w
@@ -1007,6 +1067,100 @@ n64_wait_for_command
     goto    n64_send_status
 
     goto    n64_wait_for_command    ; Ignore unimplemented commands
+
+    ;; Macro for completing the last bit and sending 1 us stop bit.
+stop_bit macro cycle
+    wait    cycle
+    bsf     N64C_TRIS
+    wait    .15
+    bcf     N64C_TRIS
+    wait    .15
+    bsf     N64C_TRIS
+    endm
+
+    ;; In bypass mode we only handle the status command. Identity, read and write commands
+    ;; are left to the real N64 controller to answer.
+n64_bypass_mode
+    ;; Need to get back receiving for read and write commands.
+    movf    n64_command, w
+    xorlw   N64_COMMAND_WRITE_BUS
+    btfsc   STATUS, Z
+    goto    n64_write_copy
+
+    movf    n64_command, w
+    xorlw   N64_COMMAND_READ_BUS
+    btfsc   STATUS, Z
+    goto    n64_read_copy
+
+    stop_bit .15                    ; Send 1 us stop bit to N64 controller.
+
+    ;; Identity is bypassed too since it provides slot information.
+    movf    n64_command, w          ; Check for both identity cmd (0x00 & 0xFF) at the same time.
+    btfss   STATUS, Z
+    comf    n64_command, w
+    btfsc   STATUS, Z
+    goto    n64_identity_copy
+
+    ;; Adaptor only answer status command.
+    movf    n64_command, w
+    xorlw   N64_COMMAND_STATUS
+    btfsc   STATUS, Z
+
+    ;; In tracing mode the adaptor simply passthough everything and
+    ;; copy it on the debug port.
+ifdef DBG_TRACE
+    goto    n64_status_copy
+else
+    goto    n64_send_status
+endif
+
+    goto    n64_wait_for_command    ; Ignore unimplemented commands.
+
+    ;; Copy 3 bytes from controller to host.
+n64_identity_copy
+    movlw   3
+    bra     n64_bus_copy_device
+
+    ;; Copy 4 bytes from controller to host.
+n64_status_copy
+    movlw   4
+    bra     n64_bus_copy_device
+
+    ;; Copy remaining 2 address bytes then send 1 us stop bit.
+    ;; Then, copy 33 bytes from controller to host.
+n64_read_copy
+    wait    .8
+    movlw   2
+    call    n64_bus_copy_host
+    stop_bit .31                    ; Send 1 us stop bit to N64 controller.
+    movlw   .33
+    bra     n64_bus_copy_device
+
+    ;; Copy remaining 32 bytes then send 1 us stop bit.
+    ;; Then, copy 1 bytes CRC from controller to host.
+n64_write_copy
+    wait    .8
+    movlw   .34
+    call    n64_bus_copy_host
+    stop_bit .31                    ; Send 1 us stop bit to N64 controller.
+    movlw   1
+    bra     n64_bus_copy_device
+
+    ;; Receive from the host and copy to dummy controller.
+    ;; Send no stop bit.
+n64_bus_copy_host
+    movwf   byte_count
+    bsf     N64C_TRIS
+    bcf     N64C_PIN
+    n64_bus_copy N64_PIN, N64C_TRIS, byte_count, 0, 0
+
+    ;; Receive from dummy controller and copy to host.
+    ;; Send 2 us stop bit.
+n64_bus_copy_device
+    movwf   byte_count
+    bsf     N64_TRIS
+    bcf     N64_PIN
+    n64_bus_copy N64C_PIN, N64_TRIS, byte_count, 0, 1
 
     ;; The N64 requested a 32-byte write to our controller pak bus.
     ;; The start address is given in the high 11 bits of n64_bus_address.
@@ -1144,7 +1298,9 @@ n64_rx_address
 n64_rx_command
     movlw   .1
     movwf   byte_count
-    n64gc_rx_buffer N64_PIN, byte_count, 1  ; Clear the watchdog while waiting for commands
+    bsf     N64C_TRIS
+    bcf     N64C_PIN
+    n64_bus_copy N64_PIN, N64C_TRIS, byte_count, 1, 0 ; Clear the watchdog while waiting for commands.
 
 
     ;; *******************************************************************************

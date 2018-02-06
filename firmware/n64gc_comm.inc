@@ -166,6 +166,7 @@ three--
     ;; Debug
     ;#define DBG_CRC
     ;#define DBG_SI
+    ;#define DBG_TRACE
 
 n64gc_init macro
     ;; Put us back in bank 0 with a bit_count of 8, preconditions for rx_buffer
@@ -393,6 +394,91 @@ not_last_bit                ; 1.6250us
     goto    bit_loop        ; 2.3750us
     ;; nop (goto 2nd word)  ; 2.4375us
     goto    $-6             ; 2.5000us
+    endm
+
+
+    ;; This is base on the basic RX function without CRC. It will copy the received
+    ;; bit to another pin of the MCU within a 1.1875 us delay. Can be used to bypass
+    ;; the adaptor or for tracing the bus packets via the debug port.
+n64_bus_copy macro port, bit, port2, bit2, byte_count, clear_watchdog, stop_bit
+    local   bit_loop
+    local   not_last_bit
+    local   not_last_byte
+
+bit_loop
+    if clear_watchdog
+        clrwdt
+    endif
+
+    btfsc   port, bit       ; 0.0000us  Poll for the beginning of the bit, max 0.1875us jitter.
+    goto    bit_loop        ; 0.0625us
+    ;; nop (goto 2nd word)  ; 0.1250us
+    bsf     port2, bit2     ; 0.1875us  *3.0000us Copy's last bit 'zero bit' rising edge.
+    wait    .13             ; 0.2500us
+    rlcf    INDF1, f        ; 1.0625us  Make room for the new bit.
+    bcf     INDF1, 0        ; 1.1250us  Assume it's 0 to begin with.
+    bcf     port2, bit2     ; 1.1875us  *0.0000us Copy's next bit falling edge.
+    decfsz  bit_count, f    ; 1.2500us  Is this the last bit?
+    goto    not_last_bit    ; 1.3125us  We have an alternate ending for the last bit...
+    ;; nop (goto 2nd word)  ; 1.3750us
+
+    decfsz  byte_count,f    ; 1.4375us  Is this the last byte?
+    goto    not_last_byte   ; 1.5000us  Yet another alternate ending for the last byte...
+    ;; nop (goto 2nd word)  ; 1.5625us
+
+    movlw   8               ; 1.6250us  Reset bit count.
+    movwf   bit_count       ; 1.6875us
+    wait    .4              ; 1.7500us
+    btfsc   port, bit       ; 2.0000us  Sample the incoming bit.
+    bsf     INDF1, 0        ; 2.0625us
+    btfsc   INDF1, 0        ; 2.1250us
+    bsf     port2, bit2     ; 2.1875us  *1.0000us Copy's 'one bit' rising edge.
+    if stop_bit
+        wait    .31         ; *1.0625us
+        bsf     port2, bit2 ; *3.0000us Copy's 'zero bit' rising edge.
+        wait    .15         ; *3.0625us
+        bcf     port2, bit2 ; *4.0000us Copy's stop bit.
+        wait    .31         ; *4.0625us
+        bsf     port2, bit2 ; *6.0000us
+    ifdef DBG_TRACE
+        movff   INDF1, PORTC
+    endif
+        ;; Following controller stop bit, got back waiting for host command right away.
+        ;; Some games may send us another read/write within les than 400 us. Polling
+        ;; the GameCube controller and the adaptor mapping work can take up to 500 us.
+        ;; We would then miss a command from the host and the transfer would fail.
+        goto    n64_wait_for_command
+    endif
+
+    return                  ; 2.2500us
+
+not_last_byte               ; 1.5625us
+    wait    .5              ; 1.6250us
+    movlw   8               ; 1.9375us
+    btfsc   port, bit       ; 2.0000us  Sample the incoming bit.
+    bsf     INDF1, 0        ; 2.0625us
+    btfsc   INDF1, 0        ; 2.1250us
+    bsf     port2, bit2     ; 2.1875us  *1.0000us Copy's 'one bit' rising edge.
+    ifdef DBG_TRACE
+        movff   INDF1, PORTC
+    endif
+    incf    FSR1L, f        ; 2.2500us  Next byte...
+    movwf   bit_count       ; 2.3125us  Reset bit count.
+    btfsc   port, bit       ; 2.3750us  Wait for the data line to go back high.
+    goto    bit_loop        ; 2.4375us
+    ;; nop (goto 2nd word)  ; 2.5000us
+    goto    $-6             ; 2.5625us
+
+not_last_bit                ; 1.3125us
+    wait    .10             ; 1.3750us
+    btfsc   port, bit       ; 2.0000us  Sample the incoming bit.
+    bsf     INDF1, 0        ; 2.0625us
+    btfsc   INDF1, 0        ; 2.1250us
+    bsf     port2, bit2     ; 2.1875us  *1.0000us Copy's 'one bit' rising edge.
+    btfsc   port, bit       ; 2.2500us  Wait for the data line to go back high.
+    goto    bit_loop        ; 2.3125us
+    ;; nop (goto 2nd word)  ; 2.3750us
+    goto    $-6             ; 2.4375us
     endm
 
     ;;; The End ;;;
