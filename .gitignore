@@ -2,4 +2,5 @@
 *.hex
 *.lst
 *.pyc
+.python-version
 

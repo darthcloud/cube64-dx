@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # Write the memory pak's 32k SRAM from a binary file specified on the command line.
 #

@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # Script for polling N64/GC SI bus devices
 #
@@ -96,47 +96,47 @@ BUTTON = {NUS:OrderedDict(
 
 class Bus(Bus):
     def identify(self):
-        reply = self.bridge.write(chr(IDENTIFY), 3)[1]
+        reply = self.bridge.write(bytes([IDENTIFY]), 3)[1]
 
-        if ord(reply[0]) == MOUSE:
+        if reply[0] == MOUSE:
           return {'system':NUS, 'type':'mouse'}
-        elif ord(reply[0]) == NUS:
-          if ord(reply[2]) == EMPTY:
+        elif reply[0] == NUS:
+          if reply[2] == EMPTY:
             return {'system':NUS, 'type':'controller', 'slot':'Empty  '}
-          elif ord(reply[2]) == OCCUPY:
+          elif reply[2] == OCCUPY:
             return {'system':NUS, 'type':'controller', 'slot':'Occupy '}
-          elif ord(reply[2]) == EMPTIED:
+          elif reply[2] == EMPTIED:
             return {'system':NUS, 'type':'controller', 'slot':'Emptied'}
-          elif ord(reply[2]) == INSERT:
+          elif reply[2] == INSERT:
             return {'system':NUS, 'type':'controller', 'slot':'Insert '}
           else:
-            print "Unknown N64 controller slot state: %r" % reply
+            print("Unknown N64 controller slot state: {}".format(reply))
             sys.exit()
-        elif ord(reply[0]) == DOL:
+        elif reply[0] == DOL:
           return {'system':DOL, 'type':'controller'}
-        elif ord(reply[0]) == WB_DOWN:
+        elif reply[0] == WB_DOWN:
           return {'system':WB_DOWN, 'type':'wavebird'}
-        elif ord(reply[0]) == WB_AUTH:
+        elif reply[0] == WB_AUTH:
           return {'system':WB_AUTH, 'type':'wavebird', 'id':reply[-2:]}
-        elif ord(reply[0]) == WB_ASSOC:
+        elif reply[0] == WB_ASSOC:
           return {'system':DOL, 'type':'wavebird'}
         else:
-          print "Unknown device identity: %r" % reply
+          print("Unknown device identity: {}".format(reply))
           sys.exit()
 
     def status(self, system):
         if system == NUS:
-          reply = self.bridge.write(chr(STATUS), 4)[1]
+          reply = self.bridge.write(bytes([STATUS]), 4)[1]
           return status_resp._make(struct.unpack('>H2b', reply))
         elif system == DOL:
           reply = self.bridge.write(struct.pack(">BH", DOL_STATUS, 0x0300), 8)[1]
           return dol_status_resp._make(struct.unpack('>H6B', reply))
         else:
-          print "Unknown system ID: %r" % system
+          print("Unknown system ID: {}".format(system))
           sys.exit()
 
     def wavebird_init(self, id):
-        return self.bridge.write(struct.pack(">BBB", WB_INIT, (ord(id[0]) | 0x20) & 0x10, ord(id[1])), 3)[1]
+        return self.bridge.write(struct.pack(">BBB", WB_INIT, (id[0] | 0x20) & 0x10, id[1]), 3)[1]
 
 def poll():
     os.system('setterm -cursor off')
@@ -161,18 +161,18 @@ def poll():
         for field, values in BUTTON[device['system']].items():
           for value in values:
             if value.mask != 0xFF:
-              print "%s%s%s" % (value.color if getattr(status, field) & value.mask else DGRAY, value.name, END),
+              print("{}{}{} ".format(value.color if getattr(status, field) & value.mask else DGRAY, value.name, END), end='')
             else:
-              print "%s%s:%+03X%s" % (value.color, value.name, getattr(status, field), END),
+              print("{}{}:{:+03X}{} ".format(value.color, value.name, getattr(status, field), END), end='')
         if 'slot' in device:
-          print "slot:%s" % device['slot'],
-        print "\r",
+          print("slot:{}".format(device['slot']), end='')
+        print("\r", end='')
         time.sleep(0.02)
     except KeyboardInterrupt:
       pass
 
     os.system('setterm -cursor on')
-    print ""
+    print("")
 
 if __name__ == "__main__":
     poll()

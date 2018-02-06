@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # Implementation of an address encoding algorithm compatible with the
 # one for bus reads and writes on N64 controllers. This algorithm was
@@ -41,7 +41,7 @@
 # --Micah Dowty <micah@navi.cx>
 #
 
-import cPickle
+import pickle
 
 
 def addrEncode(addr):
@@ -54,7 +54,7 @@ def addrEncode(addr):
     # Use this 11-byte table to generate proper check bits
     table = [0x15, 0x1F, 0x0B, 0x16, 0x19, 0x07, 0x0E, 0x1C, 0x0D, 0x1A, 0x01]
 
-    for bit in xrange(11):
+    for bit in range(11):
         if addr & (1<<(bit+5)):
             addr ^= table[bit]
     return addr
@@ -64,26 +64,25 @@ def verifyAlgorithm(vectors, f, *args, **kwargs):
     """Run the given algorithm with test vectors plus the given extra parameters,
        showing the results in a compact form.
        """
-    print "Testing algorithm"
+    print("Testing algorithm")
     passed = 0
     showFailures = 1
 
-    vectorlist = vectors.keys()
-    vectorlist.sort()
+    vectorlist = sorted(vectors.keys())
     for vector in vectorlist:
         result = f(vector, *args, **kwargs)
         expected = vectors[vector]
         if result == expected:
             passed += 1
         elif showFailures:
-            print "Failed: 0x%04X => expected 0x%04X, got 0x%04X" % (
-                vector, expected, result)
+            print("Failed: 0x{:04X} => expected 0x{:04X}, got 0x{:04X}".format(
+                vector, expected, result))
             showFailures = 0
-    print "%d/%d tests passed" % (passed, len(vectors))
+    print("{}/{} tests passed".format(passed, len(vectors)))
 
 
 if __name__ == "__main__":
-    testVectors = cPickle.load(open("address_test_vectors.p", "rb"))
+    testVectors = pickle.load(open("address_test_vectors.p", "rb"))
     verifyAlgorithm(testVectors, addrEncode)
 
 ### The End ###

@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # Using the valid.addresses file created by find_valid_addresses,
 # generate another map of just the addresses that generate a pulse
@@ -15,11 +15,11 @@ addrs = map(int, open("valid.addresses").readlines())
 f = open(sys.argv[1], "w")
 
 for addr in addrs:
-    count = b.busWrite([0]*32, addr)[0]
+    count = b.busWrite(bytes([0])*32, addr)[0]
     if count:
         f.write("%d\n" % addr)
-        print "%d  ******" % addr
+        print("{}  ******".format(addr))
     else:
-        print "%d" % addr
+        print("{}".format(addr))
 
 ### The End ###

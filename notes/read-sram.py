@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # Read the memory pak's 32k SRAM to a binary file specified on the command line.
 #

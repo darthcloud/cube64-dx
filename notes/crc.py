@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # Implementation of a CRC algorithm compatible with the one used
 # for bus reads and writes on N64 controllers. This algorithm was
@@ -24,7 +24,7 @@
 #    it to a 32-byte table.
 #
 
-import cPickle, sys
+import pickle, sys
 
 
 def extractTable(vectors):
@@ -33,8 +33,8 @@ def extractTable(vectors):
        possible message with exactly one bit set.
        """
     table = []
-    for byte in xrange(32):
-        for bit in xrange(8):
+    for byte in range(32):
+        for bit in range(8):
             packet = [0] * 32
             packet[byte] = 1<<(7-bit)
             table.append(vectors[tuple(packet)] ^ 0xFF)
@@ -45,27 +45,26 @@ def verifyAlgorithm(vectors, f, *args, **kwargs):
     """Run the given algorithm with test vectors plus the given extra parameters,
        showing the results in a compact form.
        """
-    print "Testing algorithm"
+    print("Testing algorithm")
     passed = 0
     showFailures = 1
 
-    vectorlist = vectors.keys()
-    vectorlist.sort()
+    vectorlist = sorted(vectors.keys())
     for vector in vectorlist:
-        result = f(vector, *args, **kwargs)
+        result = f(bytes(vector), *args, **kwargs)
         expected = vectors[vector]
         if result == expected:
             passed += 1
         elif showFailures:
-            print "Failed: %s => expected %02X, got %02X" % (
-                " ".join(["%02X" % b for b in vector]), expected, result)
+            print("Failed: {} => expected {:02X}, got {:02X}".format(
+                " ".join(["{:02X}".format(b) for b in vector]), expected, result))
             showFailures = 0
-    print "%d/%d tests passed" % (passed, len(vectors))
+    print("{}/{} tests passed".format(passed, len(vectors)))
 
 
 def bin(i, width=8):
     return ''.join([ "01"[i & (1<<(width-1-bit)) != 0]
-                     for bit in xrange(width) ])
+                     for bit in range(width) ])
 
 
 def tableCompress(table):
@@ -75,9 +74,9 @@ def tableCompress(table):
     b = 0
     prev = 0xCD
     smallTable = []
-    for byte in xrange(32):
+    for byte in range(32):
         output = 0
-        for bit in xrange(8):
+        for bit in range(8):
             e = table[b]
             b += 1
 
@@ -96,8 +95,8 @@ def tableCompress(table):
 def largeTableCRC(packet, table):
     """Table-driven reimplementation of Nintendo's CRC using a 256-byte table"""
     crc = 0xFF
-    for byte in xrange(32):
-        for bit in xrange(8):
+    for byte in range(32):
+        for bit in range(8):
             if packet[byte] & 1<<(7-bit):
                 crc ^= table[byte*8 + bit]
     return crc
@@ -109,12 +108,12 @@ def reversedLargeTableCRC(packet, table, verbose=0):
        CRC computation is easier to implement within the protocol bit banging.
        """
     crc = 0xFF
-    for byte in xrange(31, -1, -1):
-        for bit in xrange(7, -1, -1):
+    for byte in range(31, -1, -1):
+        for bit in range(7, -1, -1):
             if packet[31-byte] & 1<<bit:
                 crc ^= table[(byte*8) + bit]
             if verbose:
-                print "bit: 0x%02X:%d, table: 0x%02X, crc: 0x%02X" % (((byte*8) + bit), 1 if packet[31-byte] & 1<<bit else 0, table[(byte*8) + bit], crc)
+                print("bit: 0x{:02X}:{}, table: 0x{:02X}, crc: 0x{:02X}".format(((byte*8) + bit), 1 if packet[31-byte] & 1<<bit else 0, table[(byte*8) + bit], crc))
     return crc
 
 
@@ -127,11 +126,11 @@ def smallTableCRC(packet, table=None):
 
     crc = 0xFF
     y = 0xCD
-    for byte in xrange(32):
+    for byte in range(32):
         tableByte = table[byte]
         packetByte = packet[byte]
 
-        for bit in xrange(8):
+        for bit in range(8):
             if tableByte & 0x80:
                 y ^= 0x42
             if packetByte & 0x80:
@@ -145,15 +144,15 @@ def smallTableCRC(packet, table=None):
 
 
 if __name__ == "__main__":
-    testVectors = cPickle.load(open("crc_test_vectors.p", "rb"))
+    testVectors = pickle.load(open("crc_test_vectors.p", "rb"))
 
-    print "Large-table CRC:"
+    print("Large-table CRC:")
     table = extractTable(testVectors)
     verifyAlgorithm(testVectors, largeTableCRC, table)
 
-    print "Small-table CRC:"
+    print("Small-table CRC:")
     table = tableCompress(table)
-    print table
+    print(table)
     verifyAlgorithm(testVectors, smallTableCRC, table)
 
 
