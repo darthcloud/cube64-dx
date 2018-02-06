@@ -58,6 +58,9 @@
     ;; Set when we want to remap an analog trigger.
     #define FLAG_TRIGGER                menu_flags, 6
 
+    ;; Set when we want to disable GC joysticks scaling.
+    #define NV_FLAG_SCALING_OFF         nv_flags, 2
+
     ;; Button IDs. These are a superset of the GameCube and N64, without any correspondence
     ;; with the wire protocol used by either. They're used as intermediate values when
     ;; translating from GameCube to N64. These IDs are used as indices into the remapping
@@ -130,7 +133,7 @@
     #define EEPROM_LAYOUT_1     EEPROM_LAYOUT_0 + EEPROM_LAYOUT_SIZE
     #define EEPROM_LAYOUT_2     EEPROM_LAYOUT_1 + EEPROM_LAYOUT_SIZE
     #define EEPROM_LAYOUT_3     EEPROM_LAYOUT_2 + EEPROM_LAYOUT_SIZE
-    #define EEPROM_LAST_KEY_MAP EEPROM_LAYOUT_3 + EEPROM_LAYOUT_SIZE
+    #define EEPROM_NV_FLAGS     EEPROM_LAYOUT_3 + EEPROM_LAYOUT_SIZE
 
     ;; Magic word and the address it should be in the EEPROM,
     ;; as a big-endian 16-bit value.
@@ -141,8 +144,8 @@
     ;; Change this value if the EEPROM data format changes.
     ;;
 
-    #define EEPROM_MAGIC_WORD   0xAC0F
-    #define EEPROM_MAGIC_ADDR   EEPROM_LAST_KEY_MAP + 1
+    #define EEPROM_MAGIC_WORD   0xEA5C
+    #define EEPROM_MAGIC_ADDR   EEPROM_NV_FLAGS + 1
 
     ;; Convert virtual button in w to eeprom byte address in w.
 eeprom_btn_addr macro layout, byte

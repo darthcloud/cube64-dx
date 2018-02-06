@@ -102,7 +102,7 @@ pll_startup_delay macro
         remap_dest_button
         ctrl_slot_status
         target_slot_status
-        active_key_map
+        nv_flags
         temp_key_map
         crc_work
 
@@ -123,8 +123,9 @@ pll_startup_delay macro
         n64_crc
 
         n64_id_buffer:3
-        gamecube_buffer:8
-        n64_status_buffer:4
+        gamecube_buffer:6           ; Last 2 bytes for gc_buffer are within the first 2
+        gamecube_scale:8            ; bytes of gc_scale as it allows using the same macro
+        n64_status_buffer:4         ; for both buffers.
     endc
 
     ;; *******************************************************************************
@@ -150,7 +151,7 @@ startup
     clrf    menu_flags
     clrf    calibration_count
     clrf    FSR1H                   ; We only need to access first bank, so we set it in FSR high byte right away.
-    clrf    active_key_map
+    clrf    nv_flags
 
     ;; Set controller id to occupied slot.
     movlw   0x01
@@ -371,9 +372,40 @@ negative_axis_value
 next
     endm
 
+    ;; GameCube joysticks range differs from the N64. N64 has a maximum of ~84 along the axes origin
+    ;; and ~71 in the diagonals. GameCube main joystick has a maximum (once dead zone & sign applied)
+    ;; of ~90 and ~65 for the same. C joystick maximums are a bit lower at ~82 and ~57. N64 max value
+    ;; once plot will give us a square-ish equilateral hexagon while GameCube is an equiangular &
+    ;; equilateral hexagon.
+    ;; This function uses the opposite axis as a reference to determine dynamically the scaling value
+    ;; required. The scaling values are stored in a table using the fixed point format of 1.7. Once
+    ;; multiplied by the joystick value (in 8.0 format) this gives us in our hardware multiplier a
+    ;; value in the fixed point 9.7 format.
+apply_js_scale macro table, axis_byte, ref_byte
+    local   set_scale_buffer
+    movf    gamecube_buffer + axis_byte, w
+    btfsc   NV_FLAG_SCALING_OFF     ; Bypass scaling if flag set.
+    bra     set_scale_buffer
+
+    movlw   high table
+    movwf   TBLPTRH                 ; Load the right scaling table.
+    movff   gamecube_buffer + ref_byte, TBLPTRL
+    TBLRD*
+    movf    TABLAT, w
+    mulwf   gamecube_buffer + axis_byte
+
+    btfsc   gamecube_buffer + axis_byte, 7
+    subwf   PRODH, f                ; If negative stick value, fixup high byte.
+
+    rlcf    PRODL, w
+    rlcf    PRODH, w                ; We need an 8.0 value, so shift left our 9.7 value and copy the high byte.
+set_scale_buffer
+    movwf   gamecube_scale + axis_byte
+    endm
+
     ;; Map a GameCube axis to a virtual button, and eventually to an N64 axis or button.
 map_axis_from macro src_byte, virtual
-    movff   gamecube_buffer + src_byte, temp2
+    movff   gamecube_scale + src_byte, temp2
     movlw   virtual
     if virtual & 0x01               ; Check direction (sign) of the virtual button.
         btfsc   temp2, 7            ; Virtual button is negative, skip if buffer positive.
@@ -450,7 +482,12 @@ next
     ;; Copy status from the GameCube buffer to the N64 buffer. This first
     ;; stage maps all axes, and maps GameCube buttons to virtual buttons.
 n64_translate_status
-    movff   active_key_map, temp_key_map
+    movlw   upper gamecube_js_scale ; Preload scale table upper address bytes.
+    movwf   TBLPTRU
+
+    movf    nv_flags, w
+    andlw   LAYOUT_MASK
+    movwf   temp_key_map
     call    check_calibration_combo
 
     apply_calibration   GC_JOYSTICK_X,  joystick_x_calibration
@@ -460,17 +497,24 @@ n64_translate_status
     apply_calibration   GC_L_ANALOG,    left_calibration
     apply_calibration   GC_R_ANALOG,    right_calibration
 
-    bcf    STATUS, C                ; Divide by 2 to fit N64 positive axis values.
-    rrcf   gamecube_buffer + GC_L_ANALOG, f
-    bcf    STATUS, C
-    rrcf   gamecube_buffer + GC_R_ANALOG, f
-
     apply_sign_deadzone GC_JOYSTICK_X, 1
     apply_sign_deadzone GC_JOYSTICK_Y, 1
     apply_sign_deadzone GC_CSTICK_X, 1
     apply_sign_deadzone GC_CSTICK_Y, 1
     apply_sign_deadzone GC_L_ANALOG, 0
     apply_sign_deadzone GC_R_ANALOG, 0
+
+    bcf    STATUS, C                ; Divide by 2 to fit N64 positive axis values. Close enough to the proper range.
+    rrcf   gamecube_buffer + GC_L_ANALOG, w
+    movwf  gamecube_scale + GC_L_ANALOG
+    bcf    STATUS, C
+    rrcf   gamecube_buffer + GC_R_ANALOG, w
+    movwf  gamecube_scale + GC_R_ANALOG
+
+    apply_js_scale      gamecube_js_scale, GC_JOYSTICK_X, GC_JOYSTICK_Y
+    apply_js_scale      gamecube_js_scale, GC_JOYSTICK_Y, GC_JOYSTICK_X
+    apply_js_scale      gamecube_cs_scale, GC_CSTICK_X, GC_CSTICK_Y
+    apply_js_scale      gamecube_cs_scale, GC_CSTICK_Y, GC_CSTICK_X
 
     call    check_remap_combo       ; Must be after calibration, since it uses analog L and R values
 
@@ -649,9 +693,9 @@ check_remap_combo
     ;; Key combinations require that the L and R buttons be mostly pressed.
     ;; but that the end stop buttons aren't pressed.
     ;; Ensure the high bit of each axis is set and that the buttons are cleared.
-    btfss   gamecube_buffer + GC_L_ANALOG, 6
+    btfss   gamecube_buffer + GC_L_ANALOG, 7
     return
-    btfss   gamecube_buffer + GC_R_ANALOG, 6
+    btfss   gamecube_buffer + GC_R_ANALOG, 7
     return
     btfsc   gamecube_buffer + GC_L
     return
@@ -782,7 +826,8 @@ save_mapping
     movf    remap_source_button, w
     mullw   EEPROM_BTN_BYTE     ; Offset base on how many bytes per button.
     movff   PRODL, EEADR
-    movf    active_key_map, w   ; Add offset to EEPROM address to read the right custom buttons layout.
+    movf    nv_flags, w   ; Add offset to EEPROM address to read the right custom buttons layout.
+    andlw   LAYOUT_MASK
     mullw   EEPROM_LAYOUT_SIZE
     movf    PRODL, w
     addwf   EEADR, f
@@ -816,13 +861,24 @@ accept_layout_select
     bsf     FLAG_WAITING_FOR_RELEASE
     bcf     FLAG_LAYOUT_SUBMENU
     andlw   ~LAYOUT_MASK            ; Check for any D-pad direction.
+    bnz     check_js_toggle
+
+    movlw   ~LAYOUT_MASK
+    andwf   nv_flags, f
+    movf    remap_source_button, w
+    iorwf   nv_flags, f
+    bra     write_nv_flags
+
+check_js_toggle
+    movf    remap_source_button, w
+    xorlw   BTN_X
     btfss   STATUS, Z
     return
+    btg     NV_FLAG_SCALING_OFF
 
-    movf    remap_source_button, w
-    movwf   active_key_map
-    movwf   EEDATA
-    movlw   EEPROM_LAST_KEY_MAP
+write_nv_flags
+    movff   nv_flags, EEDATA
+    movlw   EEPROM_NV_FLAGS
     movwf   EEADR
     call    eewrite
     goto    start_rumble_feedback
@@ -841,9 +897,9 @@ validate_eeprom
     btfss   STATUS, Z
     goto    reset_eeprom
 
-    movlw   EEPROM_LAST_KEY_MAP     ; Load last used custom layout.
+    movlw   EEPROM_NV_FLAGS         ; Load last used custom layout.
     call    eeread
-    movwf   active_key_map
+    movwf   nv_flags
     return
 
     ;; Write an identity mapping and a valid magic word to the EEPROM.
@@ -876,7 +932,7 @@ next_eeprom_bank
     movwf   EEDATA
     call    eewrite
 
-    movlw   EEPROM_LAST_KEY_MAP     ; Init default layout in EEPROM.
+    movlw   EEPROM_NV_FLAGS         ; Init default layout in EEPROM.
     movwf   EEADR
     movlw   0x00
     movwf   EEDATA
@@ -890,7 +946,8 @@ reset_active_eeprom_layout
     movwf   TBLPTRH
     clrf    TBLPTRL
 
-    movf    active_key_map, w
+    movf    nv_flags, w
+    andlw   LAYOUT_MASK
     mullw   EEPROM_LAYOUT_SIZE
     movff   PRODL, EEADR
     TBLRD*
@@ -1397,9 +1454,13 @@ gamecube_rx
 
     ;; This contain the default configuration used if the EEPROM is empty, corrupt or
     ;; user perform reset.
-    org     0x3E00
+    org     0x3C00
 eeprom_default
     #include eeprom_default.inc
+
+    ;; This contains the scaling tables used to scale our GC joysticks values.
+    org     0x3D00
+    #include js_scale.inc
 
     ;; 256-byte table extracted from the test vectors, that can be used to
     ;; compute any CRC. This table is the inverted CRC generated for every
