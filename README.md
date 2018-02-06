@@ -121,22 +121,30 @@ To reset the current active mapping layout to the above defaults:
 
 #### Adaptor accessory mode
 
-To switch between displaying the controller with empty slot and Rumple Pak:
+The adaptor can either emulate a Rumble Pak, let all controller slot command
+bypass to a real N64 controller or display the slot as empty.
+To switch between the modes:
 
   1. While in the main menu, press D-pad UP.
 
   2. If you have the rumble power connected, you should feel a brief rumble.
 
-  3. Press D-pad LEFT for Rumble Pak mode or D-pad RIGHT for emptied slot controller.
+  3. Press D-pad UP for bypass mode, D-pad LEFT for Rumble Pak mode or D-pad RIGHT
+     for emptied slot controller.
 
   4. If you have the rumble power connected and the mode change was successful, you should
      feel a brief rumble.
 
 This setting is volatile. Adaptor always starts with Rumble Pak mode.
 
-This feature is useful for some game that report error with a Rumble Pak.
+Empty mode is useful for some game that report error with a Rumble Pak.
 For those games, without even invoking the main menu you may simply hold D-pad RIGHT
 on power on to disable the Rumble Pak mode and avoid the error.
+
+Holding D-pad UP at boot will set bypass mode as well.
+
+Setting bypass mode while no N64 controller is present in the secondary adaptor port will make
+the adaptor reset.
 
 #### Mapping layout selection
 
@@ -158,6 +166,24 @@ described above.
 
 When you select a layout, it is saved into the EEPROM so the next time you power up
 the adaptor the last used will be reloaded automatically.
+
+#### GameCube joysticks scaling
+
+By default the joysticks value from the GameCube controller are scale to match the N64
+joystick value range. This can be disabled to use the GameCube range instead (< v3.1 behavior).
+To toggle on/off the scaling function on a global basis (affect all mapping):
+
+  1. While in the main menu, press D-pad LEFT.
+
+  2. If you have the rumble power connected, you should feel a brief rumble.
+
+  3. Press X to toggle on/off the scaling function.
+
+  4. If you have the rumble power connected and the layout change was successful, you should
+     feel a brief rumble.
+
+This option is saved into the EEPROM so the next time you power up the adaptor the last 
+used setting will be reloaded automatically.
 
 #### Calibration
 

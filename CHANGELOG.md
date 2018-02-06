@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.1] - 2018-02-05
+### Added
+ - Slot bypass mode. (Fixes #10)
+ - GameCube joysticks scaling. (Fixes #7)
+
+### Changed
+ - Ported Python2 scripts to Python3.
+
 ## [3.0] - 2018-01-03
 ### Added
  - Support PIC18F14K22 microcontroller.
