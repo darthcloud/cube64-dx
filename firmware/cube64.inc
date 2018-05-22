@@ -31,7 +31,7 @@
     #define WAVEBIRD_ASSOCIATED         flags, 6
 
     ;; Adaptor bypass mode.
-    #define FLAG_BYPASS_MODE            flags, 7
+    ;#define FLAG_BYPASS_MODE            flags, 7
 
     ;; Flag to force reporting emptied slot.
     #define FLAG_FORCE_EMPTIED          flags2, 0
@@ -60,6 +60,9 @@
 
     ;; Set when we want to disable GC joysticks scaling.
     #define NV_FLAG_SCALING_OFF         nv_flags, 2
+
+    ;; Adaptor bypass mode.
+    #define NV_FLAG_BYPASS_MODE          nv_flags, 5
 
     ;; Button IDs. These are a superset of the GameCube and N64, without any correspondence
     ;; with the wire protocol used by either. They're used as intermediate values when
@@ -115,6 +118,7 @@
 
     #define TRIGGER_TYPE_MASK   0xFD
     #define LAYOUT_MASK         0x03
+    #define MODE_MASK           0x18
     #define BTN_MASK            0x1F
     #define SPECIAL_MASK        0x20
     #define SPECIAL_BIT         5

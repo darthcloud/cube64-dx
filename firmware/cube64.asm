@@ -208,7 +208,7 @@ gc_controller_ready
 
     ;; Check if the user wants to use the bypass mode on boot.
     btfsc   gamecube_buffer + GC_D_UP
-    bsf     FLAG_BYPASS_MODE
+    bsf     NV_FLAG_BYPASS_MODE
 
     call    n64_translate_status
     call    n64_wait_for_command
@@ -846,13 +846,10 @@ accept_mode_select
     return
 
     bsf     FLAG_FORCE_EMPTIED
-    bcf     FLAG_BYPASS_MODE
+    bcf     NV_FLAG_BYPASS_MODE
 
     movlw   0x02
     movwf   ctrl_slot_status
-    goto    start_rumble_feedback
-
-accept_adaptor_mode
     goto    start_rumble_feedback
 
     ;; Accept the button layout selection.
@@ -900,6 +897,11 @@ validate_eeprom
     movlw   EEPROM_NV_FLAGS         ; Load last used custom layout.
     call    eeread
     movwf   nv_flags
+
+    btfsc   nv_flags, 3
+    bsf     ctrl_slot_status, 0
+    btfsc   nv_flags, 4
+    bsf     ctrl_slot_status, 1
     return
 
     ;; Write an identity mapping and a valid magic word to the EEPROM.
@@ -934,7 +936,7 @@ next_eeprom_bank
 
     movlw   EEPROM_NV_FLAGS         ; Init default layout in EEPROM.
     movwf   EEADR
-    movlw   0x00
+    movlw   0x08
     movwf   EEDATA
     goto    eewrite
 
@@ -1048,8 +1050,20 @@ update_slot_empty_timer
     bcf     T0CON, TMR0ON
     movf    target_slot_status, w
     btfsc   STATUS, Z           ; If 0x00 we need to set bypass mode.
-    bsf     FLAG_BYPASS_MODE
+    bsf     NV_FLAG_BYPASS_MODE
     movff   target_slot_status, ctrl_slot_status
+
+    movlw   ~MODE_MASK
+    andwf   nv_flags, f
+    btfsc   ctrl_slot_status, 0
+    bsf     nv_flags, 3
+    btfsc   ctrl_slot_status, 1
+    bsf     nv_flags, 4
+
+    movff   nv_flags, EEDATA
+    movlw   EEPROM_NV_FLAGS
+    movwf   EEADR
+    call    eewrite
     return
 
 
@@ -1079,7 +1093,7 @@ n64_wait_for_command
     call    n64_rx_command
 
 ifndef DBG_TRACE
-    btfsc   FLAG_BYPASS_MODE
+    btfsc   NV_FLAG_BYPASS_MODE
 endif
     bra     n64_bypass_mode
 
