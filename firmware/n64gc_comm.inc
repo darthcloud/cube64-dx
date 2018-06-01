@@ -244,8 +244,8 @@ b                                                ; b: 0.4375us
         wait    .2
     endif
 
-    rlcf    INDF1, f, a                          ; 0.8750us  Rotate the next bit into C.
-    btfsc   STATUS, C, a                         ; 0.9375us  Our bit is in the C flag...
+    rlncf   INDF1, f, a                          ; 0.8750us  Rotate the next bit into C.
+    btfsc   INDF1, 0, a                          ; 0.9375us  Our bit is in the C flag...
     bsf     port, bit, a                         ; 1.0000us  Rising edge for 1 bits.
     decfsz  bit_count, f, b                      ; 1.0625us  Is this the last bit?
     goto    not_last_bit                         ; 1.1250us  We have an alternate ending for the last bit...
@@ -256,7 +256,7 @@ b                                                ; b: 0.4375us
     ;; nop (goto 2nd word)                       ; 1.3750us
 
     wait    .24                                  ; 1.4375us
-    btfss   STATUS, C, a                         ; 2.9375us
+    btfss   INDF1, 0, a                          ; 2.9375us
     bsf     port, bit, a                         ; 3.0000us  Rising edge for 0 bits.
     wait    .15                                  ; 3.0625us
     bcf     port, bit, a                         ; 0.0000us  Begin a stop bit.
@@ -275,23 +275,23 @@ b                                                ; b: 0.4375us
 
 not_last_byte                                    ; 1.3750us
     ifdef DBG_SI
-        wait    .19
+        wait    .20
     else
-        wait    .21                              ; 1.4375us
+        wait    .22                              ; 1.4375us
     endif
-    incf    FSR1L, f, a                          ; 2.7500us  Point at the next byte.
     ifdef DBG_SI
        movff   INDF1, PORTC
     endif
     movlw   8                                    ; 2.8125us  Reinitialize the bit counter.
     movwf   bit_count, b                         ; 2.8750us
-    btfss   STATUS, C, a                         ; 2.9375us
+    btfss   INDF1, 0, a                          ; 2.9375us
     bsf     port, bit, a                         ; 3.0000us  Rising edge for 0 bits.
-    goto    bit_loop                             ; 3.0625us
+    incf    FSR1L, f, a                          ; 3.0625us  Point at the next byte.
+    goto    bit_loop                             ; 3.1250us
 
 not_last_bit                                     ; 1.1875us
     wait    .27                                  ; 1.2500us
-    btfss   STATUS, C, a                         ; 2.9375us
+    btfss   INDF1, 0, a                          ; 2.9375us
     bsf     port, bit, a                         ; 3.0000us  Rising edge for 0 bits.
     goto    bit_loop                             ; 3.0625us  Next bit...
     endm
@@ -337,7 +337,7 @@ bit_loop
         clrwdt
     endif
 
-    btfsc   port, bit, a                         ; 0.0000us  Poll for the beginning of the bit, max 0.1875us jitter.
+    btfsc   port, bit                            ; 0.0000us  Poll for the beginning of the bit, max 0.1875us jitter.
     goto    bit_loop                             ; 0.0625us
     ;; nop (goto 2nd word)                       ; 0.1250us
 
@@ -396,6 +396,36 @@ not_last_bit                                     ; 1.6250us
     goto    $-6                                  ; 2.5000us
     endm
 
+    ;; We get late into the first bit around 0.4 us. Use the spare cycle to init
+    ;; pretty much everything.
+n64_rx_command_start macro
+    wait    .11                                  ; 0.3750us  We get into the interrupt at around 0.4 us.
+    bsf     GAMECUBE_TRIS                        ; 1.0625us
+    bcf     N64C_PIN                             ; 1.1250us  Finish secondary port setup.
+    bcf     N64C_TRIS                            ; 1.1875us  *0.0000us Copy's next bit falling edge.
+    wait    .3                                   ; 1.2500us
+    clrf    FSR1H, a                             ; 1.4375us
+    movlw   n64_command                          ; 1.5000us
+    movwf   FSR1L, a                             ; 1.5625us
+    btg     FSR2L, 2, a                          ; 1.6250us Use last good regs copy.
+    clrf    STKPTR, a                            ; 1.6875us
+    movlw   high crc_large_table                 ; 1.7500us  Load CRC table high address byte
+    movwf   TBLPTRH, a                           ; 1.8125us  with spare time.
+    rlcf    INDF1, f, a                          ; 1.8750us  Make room for the new bit.
+    bcf     INDF1, 0, a                          ; 1.9375us  Assume it's 0 to begin with.
+    btfsc   N64_PIN                              ; 2.0000us  Sample the incoming bit.
+    bsf     INDF1, 0, a                          ; 2.0625us
+    btfsc   INDF1, 0, a                          ; 2.1250us
+    bsf     N64C_TRIS                            ; 2.1875us  *1.0000us Copy's 'one bit' rising edge.
+    movlw   7                                    ; 2.2500us  We just did first bit, 7 remaining.
+    movwf   bit_count, b                         ; 2.3125us
+    movlw   .1                                   ; 2.3750us
+    movwf   byte_count, b                        ; 2.4375us
+    movf    PORTA, w, a                          ; 2.5000us
+    movf    PORTB, w, a                          ; 2.5625us
+    btfss   N64_PIN                              ; 2.6250us  Wait for the data line to go back high.
+    bra     $-2                                  ; 2.6875us
+    endm
 
     ;; This is base on the basic RX function without CRC. It will copy the received
     ;; bit to another pin of the MCU within a 1.1875 us delay. Can be used to bypass
@@ -422,7 +452,7 @@ bit_loop
     goto    not_last_bit                         ; 1.3125us  We have an alternate ending for the last bit...
     ;; nop (goto 2nd word)                       ; 1.3750us
 
-    decfsz  byte_count,f, b                      ; 1.4375us  Is this the last byte?
+    decfsz  byte_count, f, b                     ; 1.4375us  Is this the last byte?
     goto    not_last_byte                        ; 1.5000us  Yet another alternate ending for the last byte...
     ;; nop (goto 2nd word)                       ; 1.5625us
 
@@ -447,7 +477,6 @@ bit_loop
         ;; Some games may send us another read/write within les than 400 us. Polling
         ;; the GameCube controller and the adaptor mapping work can take up to 500 us.
         ;; We would then miss a command from the host and the transfer would fail.
-        goto    n64_wait_for_command
     endif
 
     return                                       ; 2.2500us

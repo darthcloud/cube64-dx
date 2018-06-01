@@ -29,9 +29,9 @@
 
         CONFIG FOSC = IRC, PLLEN = ON, PCLKEN = OFF, FCMEN = OFF, IESO = OFF
         CONFIG PWRTEN = OFF, BOREN = OFF
-        CONFIG WDTEN = ON, WDTPS = 128
+        CONFIG WDTEN = ON, WDTPS = 1
         CONFIG HFOFST = ON, MCLRE = OFF
-        CONFIG STVREN = OFF, LVP = OFF, BBSIZ = OFF, XINST = OFF, DEBUG = OFF
+        CONFIG STVREN = OFF, LVP = OFF, BBSIZ = OFF, XINST = ON, DEBUG = OFF
         CONFIG CP0 = OFF, CP1 = OFF
         CONFIG CPB = OFF, CPD = OFF
         CONFIG WRT0 = OFF, WRT1 = OFF
@@ -45,13 +45,13 @@
         #define GAMECUBE_TRIS   TRISA, 4
         #define N64C_PIN        PORTA, 2
         #define N64C_TRIS       TRISA, 2
-        #define RAM_START       0x00
 
 io_init macro
         clrf    PORTA, a
         clrf    PORTB, a
         clrf    WPUA, a                          ; Disable pull-ups.
         clrf    WPUB, a
+        bsf     IOCB, IOCB4, a                   ; Enable interrupt on N64_PIN.
         setf    TRISA, a
         setf    TRISB, a
         clrf    PORTC, a                         ; Debug port
@@ -84,12 +84,15 @@ pll_startup_delay macro
     org 0x00
     goto    startup
     org 0x08
-    retfie
-    org 0x18
-    retfie
+    n64_rx_command_start
+    call    n64_rx_command_end
+    call    n64_detect_command
+    call    n64_reinit
+    goto    int_reentry
 
-    ;; Variables.
-    cblock  RAM_START
+    ;; Variables accessed through Direct Addressing Mode. (Bank 0)
+    ;; We keep a single copy of those variables.
+    cblock 0x00
         flags
         flags2
         menu_flags
@@ -103,7 +106,6 @@ pll_startup_delay macro
         calibration_count
         remap_source_button
         remap_dest_button
-        ctrl_slot_status
         target_slot_status
         temp_key_map
         crc_work
@@ -118,34 +120,45 @@ pll_startup_delay macro
 
         ;; These four items must be contiguous.
         ;; Note that n64_command and n64_bus_address point to the same memory.
-        ;; This is explained in the bus write receive code near n64_wait_for_command.
+        ;; This is explained in the bus write receive code near n64_detect_command.
         n64_command:0
         n64_bus_address:2
         n64_bus_packet:.32
         n64_crc
 
         n64_id_buffer:3
+        n64_slot_status                          ; Can't store directly in id buffer since transmission modify the buffers.
         gamecube_buffer:6                        ; Last 2 bytes for gc_buffer are within the first 2
-        gamecube_scale:8                         ; bytes of gc_scale as it allows using the same macro
-        n64_status_buffer:4                      ; for both buffers.
+        gamecube_scale:8                         ; bytes of gc_scale as it allows using the same macro for both buffers.
     endc
+
+    ;; Variables accessed through Indexed Literal Offset Mode. (Bank 1)
+    ;; This allows toggling between 2 copies of those variables via FSR2.
+    cblock  0x00
+        n64_status_buffer:0
+        n64_status_buffer0:4
+        n64_status_buffer1:4
+    endc
+
 
     ;; *******************************************************************************
     ;; ******************************************************  Initialization  *******
     ;; *******************************************************************************
 
 startup
-    movlb   0x00                                 ; Set bank 0 active.
-    bcf     INTCON, GIE, a                       ; Disable interrupts.
+    movlb   0x00                                 ; Set bank 0 active for non-mirrored data.
+    movlw   0x01
+    movwf   FSR2H, a
+    clrf    FSR2L, a
+    bcf     INTCON, GIE, a                       ; Init interrupts.
+    bsf     INTCON, RABIE, a
+    bsf     INTCON2, RABPU, a
+    bsf     INTCON2, RABIP, a
+    bsf     RCON, IPEN, a
     movlw   0x70                                 ; Set internal clock to 16 MHz.
     movwf   OSCCON, a
     pll_startup_delay                            ; Wait for PLL to shift frequency to 64 MHz.
     io_init
-
-    movlw   upper crc_large_table                ; Preload table upper & high address bytes.
-    movwf   TBLPTRU, a
-    movlw   high crc_large_table
-    movwf   TBLPTRH, a
 
     n64gc_init
     clrf    flags, b
@@ -153,14 +166,18 @@ startup
     clrf    menu_flags, b
     clrf    nv_flags, b
     clrf    calibration_count, b
+    clrf    FSR0H, a
     clrf    FSR1H, a                             ; We only need to access first bank, so we set it in FSR high byte right away.
+    clrf    TBLPTRU, a                           ; Preload table upper byte. Same for all tables.
+    movlw   high crc_large_table                 ; Preload table high byte for CRC table initially.
+    movwf   TBLPTRH, a
 
-    ;; Set controller id to occupied slot.
-    movlw   0x01
-    movwf   ctrl_slot_status, b
+    movlw   0x01                                 ; Set controller id to occupied slot.
+    movwf   n64_slot_status, b
 
     movlw   .34                                  ; Reset bus_byte_count to 34. Keeping this set beforehand,
     movwf   bus_byte_count, b                    ; saves a few precious cycles in receiving bus writes.
+
 
     ;; We use the watchdog to implicitly implement controller probing.
     ;; If we have no GameCube controller attached, gamecube_poll_status
@@ -177,50 +194,22 @@ startup
     ;; Check our EEPROM for validity, and reset it if it's blank or corrupted.
     call    validate_eeprom
 
-    ;; To detect if the GC controller is a WaveBird, we send a identify command (0x00)
-    ;; to the controller. We then follow with N64 task since the controller won't be responding
-    ;; to any command for a while.
-gc_controller_id_check
-    call    gamecube_get_id
-    call    n64_wfc_empty_buffer
+    call    gamecube_init
 
-    ;; If the controller is a WaveBird we need to do some special initialization process first.
-    ;; else we have a standard controller and we are ready to poll status.
-    btfss   WAVEBIRD
-    goto    gc_controller_ready
-
-    ;; If we have an WaveBird associated with the receiver we are ready to init it.
-    ;; else we go back reading the controller id.
-    btfss   WAVEBIRD_ASSOCIATED
-    goto    gc_controller_id_check
-
-    call    gamecube_init_wavebird
-    call    n64_wfc_empty_buffer
-
-    ;; Calibrate the controller now since before that the WaveBird would not have repond to poll status.
-    ;; Note that we have to continue on with n64_translate_status and n64_wait_for_command
-    ;; because the GameCube controller won't be ready for another poll immediately.
-gc_controller_ready
-    call    gamecube_poll_status
-    call    gamecube_reset_calibration
-
-    ;; Check if the user wants to disable Rumble Pak emulation on boot.
-    btfsc   gamecube_buffer + GC_D_RIGHT, b
-    clrf    ctrl_slot_status, b
-
-    ;; Check if the user wants to use the bypass mode on boot.
-    btfsc   gamecube_buffer + GC_D_UP, b
-    bsf     FLAG_BYPASS_MODE
-
-    call    n64_translate_status
-    call    n64_wait_for_command
-
+int_reentry
+    movf    PORTA, w, a
+    movf    PORTB, w, a
+    nop
+    bcf     INTCON, RABIF, a
+    bsf     INTCON, GIEH, a
 main_loop
+    clrwdt
     call    update_rumble_feedback               ; Give feedback for remapping operations using the rumble motor.
     call    update_slot_empty_timer              ; Report slot empty for 1 s following adaptor mode change.
     call    gamecube_poll_status                 ; The GameCube poll takes place during the dead period
     call    n64_translate_status                 ; between incoming N64 commands, hopefully.
-    call    n64_wait_for_command
+    btg     FSR2L, 2, a                          ; Set older regs copy as working regs.
+    call    gamecube_bus_wait
     goto    main_loop
 
 
@@ -312,23 +301,25 @@ no_calibration_combo
     ;; the greater value to the destination.
 assign_greater_abs_value macro prospect_byte, dest_byte
     local   next
-    movff   prospect_byte, temp
-    btfsc   prospect_byte, 7, b                  ; If prospect negative then
+    movf    dest_byte, w, a
+    movwf   temp, b
+    btfsc   dest_byte, 7, a                      ; If dest_byte negative then
     negf    temp, b                              ; two's complement it.
     movf    temp, w, b
-    movff   dest_byte, temp
-    btfsc   dest_byte, 7, b                      ; Same for dest.
+    movff   prospect_byte, temp
+    btfsc   prospect_byte, 7, b                  ; Same for prospect.
     negf    temp, b
-    cpfslt  temp, b                              ; If prospect abs value greater
-    goto    next                                 ; than dest, overwrite it.
-    movff   prospect_byte, dest_byte
+    cpfsgt  temp, b                              ; If prospect abs value greater
+    bra     next                                 ; than dest, overwrite it.
+    movf    prospect_byte, w, b
+    movwf   dest_byte, a
 next
     endm
 
     ;; Map a GameCube button to a virtual button, and eventually to an N64 button.
 map_button_from macro src_byte, src_bit, virtual
     movlw   virtual
-    btfsc   gamecube_buffer+src_byte, src_bit, b
+    btfsc   gamecube_buffer + src_byte, src_bit, b
     call    remap_virtual_button
     endm
 
@@ -340,7 +331,7 @@ map_button_to macro virtual, dest_byte, dest_bit
     xorlw   virtual
     btfss   STATUS, Z, a
     goto    next
-    bsf     n64_status_buffer+dest_byte, dest_bit, b
+    bsf     n64_status_buffer + dest_byte, dest_bit, a
     return
 next
     endm
@@ -477,16 +468,13 @@ map_axis_button macro virtual, dest_byte
     else
         movlw   AXIS_BTN_VALUE
     endif
-    movwf   n64_status_buffer + dest_byte, b     ; Could be overwritten by a real axis.
+    movwf   n64_status_buffer + dest_byte, a     ; Could be overwritten by a real axis.
 next
     endm
 
     ;; Copy status from the GameCube buffer to the N64 buffer. This first
     ;; stage maps all axes, and maps GameCube buttons to virtual buttons.
 n64_translate_status
-    movlw   upper gamecube_js_scale              ; Preload scale table upper address bytes.
-    movwf   TBLPTRU, a
-
     movf    nv_flags, w, b
     andlw   LAYOUT_MASK
     movwf   temp_key_map, b
@@ -522,10 +510,10 @@ n64_translate_status
 
     ;; Restart here if layout modifier button is pressed.
 n64_translate_restart
-    clrf    n64_status_buffer + 0, b             ; Start out with everything zeroed...
-    clrf    n64_status_buffer + 1, b
-    clrf    n64_status_buffer + 2, b
-    clrf    n64_status_buffer + 3, b
+    clrf    n64_status_buffer + 0, a             ; Start out with everything zeroed...
+    clrf    n64_status_buffer + 1, a
+    clrf    n64_status_buffer + 2, a
+    clrf    n64_status_buffer + 3, a
     bsf     FLAG_NO_VIRTUAL_BTNS
 
     map_button_from     GC_A,       BTN_A
@@ -710,17 +698,20 @@ check_remap_combo
 
     ;; The config menu button combo was pressed. Give feedback via the rumble motor,
     ;; and await button presses from the user indicating which menu option they want
-    ;; access to. Selection is handled into remap_virtual_button since we need virutal
+    ;; access to. Selection is handled into remap_virtual_button since we need virtual
     ;; button codes.
-    bsf     FLAG_WAITING_FOR_RELEASE
-    bsf     FLAG_TOP_CONFIG_MENU
+    movf    menu_flags, w, b
+    iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
+    iorlw   BIT_TOP_CONFIG_MENU                  ; bsf     FLAG_TOP_CONFIG_MENU
+    movwf   temp, b
     goto    start_rumble_feedback
 
     ;; Accept the virtual button pressed for menu selection in 'w', and
     ;; set the right flag for next user input.
 accept_config_menu_select
-    bcf     FLAG_TOP_CONFIG_MENU
-    bsf     FLAG_WAITING_FOR_RELEASE
+    movf    menu_flags, w, b
+    andlw   ~BIT_TOP_CONFIG_MENU                 ; bcf     FLAG_TOP_CONFIG_MENU
+    iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
 
     ;; The remap button combo was pressed. Give feedback via the rumble motor,
     ;; and await button presses from the user indicating what they want to remap.
@@ -733,7 +724,7 @@ accept_config_menu_select
     btfsc   gamecube_buffer + GC_Y, b
     bra     menu_special_source_wait
 
-    bcf     FLAG_TRIGGER                         ; Flag not used in following commands.
+    andlw   ~BIT_TRIGGER                         ; bcf     FLAG_TRIGGER, Flag not used in following commands.
 
     ;; The analog trigger mapping combo was pressed.
     ;; This modify both remap and special combo to allow mapping to analog trigger.
@@ -753,79 +744,95 @@ accept_config_menu_select
     btfsc   gamecube_buffer + GC_D_LEFT, b
     bra     menu_layout_submenu
 
+    movwf   menu_flags, b                        ; Set flags as atomic operations. Avoid disabling interrupt.
     return
 
 menu_remap_source_wait
-    bsf     FLAG_REMAP
-    bsf     FLAG_SOURCE_WAIT
+    iorlw   BIT_REMAP                            ; bsf     FLAG_REMAP
+    iorlw   BIT_SOURCE_WAIT                      ; bsf     FLAG_SOURCE_WAIT
+    movwf   temp, b
     goto    start_rumble_feedback
 
 menu_special_source_wait
-    bsf     FLAG_SPECIAL
-    bsf     FLAG_SOURCE_WAIT
+    iorlw   BIT_SPECIAL                          ; bsf     FLAG_SPECIAL
+    iorlw   BIT_SOURCE_WAIT                      ; bsf     FLAG_SOURCE_WAIT
+    movwf   temp, b
     goto    start_rumble_feedback
 
 menu_trigger_flag_set
-    bsf     FLAG_TRIGGER
-    bsf     FLAG_TOP_CONFIG_MENU
+    iorlw   BIT_TRIGGER                          ; bsf     FLAG_TRIGGER
+    iorlw   BIT_TOP_CONFIG_MENU                  ; bsf     FLAG_TOP_CONFIG_MENU
+    movwf   temp, b
     goto    start_rumble_feedback
 
 menu_reset_active_eeprom_layout
+    movwf   temp, b
     call    reset_active_eeprom_layout
     goto    start_rumble_feedback
 
 menu_mode_submenu
-    bsf     FLAG_MODE_SUBMENU
+    iorlw   BIT_MODE_SUBMENU                     ; bsf     FLAG_MODE_SUBMENU
+    movwf   temp, b
     goto    start_rumble_feedback
 
 menu_layout_submenu
-    bsf     FLAG_LAYOUT_SUBMENU
+    iorlw   BIT_LAYOUT_SUBMENU                   ; bsf     FLAG_LAYOUT_SUBMENU
+    movwf   temp, b
     goto    start_rumble_feedback
 
     ;; Accept the virtual button code for the remap source in 'w', and prepare
     ;; to accept the remap destination.
 accept_source
     movwf   remap_source_button, b
-    bsf     FLAG_WAITING_FOR_RELEASE
-    bcf     FLAG_SOURCE_WAIT
+    movf    menu_flags, w, b
+    iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
+    andlw   ~BIT_SOURCE_WAIT                     ; bcf     FLAG_SOURCE_WAIT
+    movwf   menu_flags, b                        ; Set flags as atomic operations. Avoid disabling interrupt.
     return
 
     ;; Accept the virtual button code for the remap destination in 'w', and write
     ;; the button mapping to EEPROM.
 accept_remap_dest
     movwf   EEDATA, a                            ; Destination button is data, source is address.
-    bsf     FLAG_WAITING_FOR_RELEASE
-    bcf     FLAG_REMAP
+    movf    menu_flags, w, b
+    iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
+    andlw   ~BIT_REMAP                           ; bcf     FLAG_REMAP
+    movwf   temp, b
 
     bra     common_accept_dest
 
     ;; Accept the virtual button code for the special function destination in 'w'.
 accept_special_dest
     movwf   EEDATA, a
-    bsf     FLAG_WAITING_FOR_RELEASE
-    bcf     FLAG_SPECIAL
+    movf    menu_flags, w, b
+    iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
+    andlw   ~BIT_SPECIAL                         ; bcf     FLAG_SPECIAL
+    movwf   temp, b
 
     ;; Validate if one of the D-pad direction is pressed for the layout modifier function.
     ;; Save as a special button if so, return otherwise.
+    movf    EEDATA, w, a
     andlw   ~LAYOUT_MASK                         ; Check for any D-pad direction.
     bz      common_accept_dest - 2
-    bcf     FLAG_TRIGGER
+    movf    temp, w, b
+    andlw   ~BIT_TRIGGER                         ; bcf     FLAG_TRIGGER
+    movwf   menu_flags, b                        ; Set flags as atomic operations. Avoid disabling interrupt.
     return
 
     bsf     EEDATA, SPECIAL_BIT, a
 common_accept_dest
+    movf    remap_source_button, w, b
+    movwf   temp2, b
     btfsc   FLAG_TRIGGER                         ; If flag set, this means we want to allow analog trigger mapping.
     bra     save_mapping
 
-    movf    remap_source_button, w, b
     andlw   TRIGGER_TYPE_MASK
     xorlw   BTN_LA
     btfsc   STATUS, Z, a                         ; If analog trigger, overwrite source with digital trigger.
-    incf    remap_source_button, f, b
+    incf    temp2, f, b
 
 save_mapping
-    bcf     FLAG_TRIGGER
-    movf    remap_source_button, w, b
+    movf    temp2, w, b
     mullw   EEPROM_BTN_BYTE                      ; Offset base on how many bytes per button.
     movff   PRODL, EEADR
     movf    nv_flags, w, b                       ; Add offset to EEPROM address to read the right custom buttons layout.
@@ -834,34 +841,44 @@ save_mapping
     movf    PRODL, w, a
     addwf   EEADR, f, a
     call    eewrite
+    movf    temp, w, b
+    andlw   ~BIT_TRIGGER                         ; bcf     FLAG_TRIGGER
+    movwf   temp, b
     goto    start_rumble_feedback
 
     ;; Accept the adapter mode selection.
 accept_mode_select
-    movwf   target_slot_status
-    bsf     FLAG_WAITING_FOR_RELEASE
-    bcf     FLAG_MODE_SUBMENU
+    movwf   target_slot_status, b
+    movf    menu_flags, w, b
+    iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
+    andlw   ~BIT_MODE_SUBMENU                    ; bcf     FLAG_MODE_SUBMENU
+    movwf   temp, b
 
     movf    target_slot_status, w, b
     xorlw   BTN_D_DOWN
-    btfsc   STATUS, Z, a
+    bnz     valid_mode
+    movff   temp, menu_flags                     ; Set flags as atomic operations. Avoid disabling interrupt.
     return
 
-    bsf     FLAG_FORCE_EMPTIED
-    bcf     FLAG_BYPASS_MODE
-
+valid_mode
     movlw   0x02
-    movwf   ctrl_slot_status, b
-    goto    start_rumble_feedback
+    movwf   n64_slot_status, b
 
-accept_adaptor_mode
+    movf    flags, w, b
+    iorlw   BIT_FORCE_EMPTIED                    ; bsf     FLAG_FORCE_EMPTIED
+    andlw   ~BIT_BYPASS_MODE                     ; bcf     FLAG_BYPASS_MODE
+    movwf   flags, b
     goto    start_rumble_feedback
 
     ;; Accept the button layout selection.
 accept_layout_select
     movwf   remap_source_button, b
-    bsf     FLAG_WAITING_FOR_RELEASE
-    bcf     FLAG_LAYOUT_SUBMENU
+    movf    menu_flags, w, b
+    iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
+    andlw   ~BIT_LAYOUT_SUBMENU                  ; bcf     FLAG_LAYOUT_SUBMENU
+    movwf   temp, b
+
+    movf    remap_source_button, w, b
     andlw   ~LAYOUT_MASK                         ; Check for any D-pad direction.
     bnz     check_js_toggle
 
@@ -876,6 +893,7 @@ check_js_toggle
     andlw   ~0x01
     xorlw   BTN_X
     bz      accept_js_select
+    movff   temp, menu_flags                     ; Set flags as atomic operations. Avoid disabling interrupt.
     return
 
 accept_js_select
@@ -883,7 +901,8 @@ accept_js_select
     btfsc   remap_source_button, 0, b            ; BTN_Y disable scaling, BTN_X enable it.
     bsf     NV_FLAG_SCALING_OFF
 write_nv_flags
-    movff   nv_flags, EEDATA
+    movf    nv_flags, w, b
+    movwf   EEDATA, a
     movlw   EEPROM_NV_FLAGS
     movwf   EEADR, a
     call    eewrite
@@ -910,9 +929,7 @@ validate_eeprom
 
     ;; Write an identity mapping and a valid magic word to the EEPROM.
 reset_eeprom
-    movlw   upper eeprom_default                 ; Load address for EEPROM layout default.
-    movwf   TBLPTRU, a
-    movlw   high eeprom_default
+    movlw   high eeprom_default                  ; Load address for EEPROM layout default.
     movwf   TBLPTRH, a
 
     movlw   EEPROM_LAYOUT_0                      ; Loop over all virtual buttons, writing the identity mapping.
@@ -946,9 +963,8 @@ next_eeprom_bank
 
     ;; Reset only data relative to the current active button mapping layout.
 reset_active_eeprom_layout
-    movlw   upper eeprom_default                 ; Load address for EEPROM layout default.
-    movwf   TBLPTRU, a
-    movlw   high eeprom_default
+    bcf     INTCON, GIEH, a
+    movlw   high eeprom_default                  ; Load address for EEPROM layout default.
     movwf   TBLPTRH, a
     clrf    TBLPTRL, a
 
@@ -969,6 +985,11 @@ reset_next_byte
     xorlw   EEPROM_LAYOUT_SIZE
     btfss   STATUS, Z, a
     goto    reset_next_byte
+    movf    PORTA, w, a
+    movf    PORTB, w, a
+    nop
+    bcf     INTCON, RABIF, a
+    bsf     INTCON, GIEH, a
     return
 
     ;; Read from address 'w' of the EEPROM, return in 'w'.
@@ -1008,6 +1029,7 @@ start_rumble_feedback
     movwf   TMR0H, a
     movlw   0xF6
     movwf   TMR0L, a                             ; TMR0 now loaded with 0xC2F6.
+    movff   temp, menu_flags                     ; Set flags as atomic operations. Avoid disabling interrupt.
     return
 
     ;; At each status poll, turn on the rumble motor if we're in the middle of
@@ -1019,9 +1041,11 @@ update_rumble_feedback
 
     btfss   INTCON, TMR0IF, a
     return
-    bcf     FLAG_RUMBLE_FEEDBACK
-    bcf     FLAG_RUMBLE_MOTOR_ON                 ; We need to turn off the motor when we're done.
     bcf     T0CON, TMR0ON, a
+    movf    flags, w, b
+    andlw   ~BIT_RUMBLE_FEEDBACK                 ; bcf     FLAG_RUMBLE_FEEDBACK
+    andlw   ~BIT_RUMBLE_MOTOR_ON                 ; bcf     FLAG_RUMBLE_MOTOR_ON, We need to turn off the motor when we're done.
+    movwf   flags, b                             ; Set flags as atomic operations. Avoid disabling interrupt.
     return
 
     ;; When switching between adaptor mode, we need to report the controller slot as
@@ -1050,12 +1074,14 @@ update_slot_empty_timer
     btfss   INTCON, TMR0IF, a
     return
 
-    bcf     FLAG_FORCE_EMPTIED
+    movf    flags, w ,b
+    andlw   ~BIT_FORCE_EMPTIED                   ; bcf     FLAG_FORCE_EMPTIED
     bcf     T0CON, TMR0ON, a
-    movf    target_slot_status, w, b
+    movf    target_slot_status, f, b
     btfsc   STATUS, Z, a                         ; If 0x00 we need to set bypass mode.
-    bsf     FLAG_BYPASS_MODE
-    movff   target_slot_status, ctrl_slot_status
+    iorlw   BIT_BYPASS_MODE                      ; bsf     FLAG_BYPASS_MODE
+    movff   target_slot_status, n64_slot_status
+    movwf   flags, b                             ; Set flags as atomic operations. Avoid disabling interrupt.
     return
 
 
@@ -1063,26 +1089,18 @@ update_slot_empty_timer
     ;; ******************************************************  N64 Interface *********
     ;; *******************************************************************************
 
-    ;; While waiting for a WaveBird to associate, we don't have any status poll
-    ;; so we need to empty the n64_status_buffer before n64_wait_for_command.
-n64_wfc_empty_buffer
-    clrf    n64_status_buffer + 0, b
-    clrf    n64_status_buffer + 1, b
-    clrf    n64_status_buffer + 2, b
-    clrf    n64_status_buffer + 3, b
+n64_reinit
+    clrf    FSR1H, a
+    btg     FSR2L, 2, a
+    bsf     N64C_TRIS, a
+
+    bcf     FLAG_AXIS
+    bcf     FLAG_LAYOUT_MODIFIER
+    call    gamecube_wait_for_idle
+    return
 
     ;; Service commands coming in from the N64
-n64_wait_for_command
-    movlw   upper crc_large_table                ; Preload CRC table upper & high address bytes.
-    movwf   TBLPTRU, a
-    movlw   high crc_large_table
-    movwf   TBLPTRH, a
-
-    call    n64_wait_for_idle                    ; Ensure the line is idle first, so we don't jump in to the middle of a command
-
-    movlw   n64_command                          ; Receive 1 command byte
-    movwf   FSR1L, a
-    call    n64_rx_command
+n64_detect_command
 
 ifndef DBG_TRACE
     btfsc   FLAG_BYPASS_MODE
@@ -1129,7 +1147,7 @@ endif
     btfsc   STATUS, Z, a
     goto    n64_send_status
 
-    goto    n64_wait_for_command                 ; Ignore unimplemented commands
+    return
 
     ;; Macro for completing the last bit and sending 1 us stop bit.
 stop_bit macro cycle
@@ -1177,7 +1195,7 @@ else
     goto    n64_send_status
 endif
 
-    goto    n64_wait_for_command                 ; Ignore unimplemented commands.
+    return
 
     ;; Copy 3 bytes from controller to host.
 n64_identity_copy
@@ -1260,7 +1278,7 @@ time_killing
     btfss   STATUS, Z, a
     return                                       ; Nope, return. We ignore the initialization writes to 0x8000.
 
-    btfss   ctrl_slot_status, 0, b               ; Do not rumble if we are supose to be an empty controller.
+    btfss   n64_slot_status, 0, b                ; Do not rumble if we are supose to be an empty controller.
     return
 
     bcf     FLAG_RUMBLE_MOTOR_ON                 ; Set the rumble flag from the low bit of the first data byte.
@@ -1282,27 +1300,20 @@ n64_bus_read
 
     movlw   0x01                                 ; Check if address is 0x8001, answer 0x80s if so.
     xorwf   n64_bus_address + 1, w, b
-    btfss   STATUS, Z, a
-    goto    zero_packet
+    bnz     zero_packet
     movlw   0x80
     xorwf   n64_bus_address + 0, f, b
-    btfss   STATUS, Z, a
-    goto    zero_packet
-    goto    setup_buffer                         ; We conveniently already got 0x80 in w.
+    bnz     zero_packet
+    bra     bus_read_fill_loop                   ; We conveniently already got 0x80 in w.
 zero_packet
     movlw   0x00                                 ; Otherwise reply 0x00s.
 
-setup_buffer
-    incf    FSR1L, f, a
-
 bus_read_fill_loop
-    movwf   INDF1, a
-    incf    FSR1L, f, a
+    movwf   PREINC1, a
     decfsz  byte_count, f, b
     goto    bus_read_fill_loop
 
-    movlw   0xFF                                 ; Preload n64_crc for final CRC XOR.
-    movwf   n64_crc, b
+    setf    n64_crc, b                           ; Preload n64_crc for final CRC XOR.
 
     movlw   n64_bus_packet                       ; Send back the data and CRC.
     movwf   FSR1L, a
@@ -1311,8 +1322,11 @@ bus_read_fill_loop
 
     ;; The N64 asked for our button and joystick status.
 n64_send_status
-    movlw   n64_status_buffer                    ; Transmit the status buffer
+    movff   FSR2H, FSR1H
+    movf    FSR2L, w, a
+    addlw   n64_status_buffer
     movwf   FSR1L, a
+
     movlw   4
     goto    n64_tx
 
@@ -1321,10 +1335,8 @@ n64_send_status
 n64_send_id
     movlw   0x05
     movwf   n64_id_buffer + 0, b
-    movlw   0x00
-    movwf   n64_id_buffer + 1, b
-    movf    ctrl_slot_status, w, b
-    movwf   n64_id_buffer + 2, b
+    clrf    n64_id_buffer + 1, b
+    movff   n64_slot_status, n64_id_buffer + 2
 
     movlw   n64_id_buffer                        ; Transmit the ID buffer
     movwf   FSR1L, a
@@ -1358,17 +1370,41 @@ n64_rx_bus
 n64_rx_address
     n64gc_rx_buffer N64_PIN, byte_count, 0
 
-n64_rx_command
-    movlw   .1
-    movwf   byte_count, b
-    bsf     N64C_TRIS, a
-    bcf     N64C_PIN, a
-    n64_bus_copy N64_PIN, N64C_TRIS, byte_count, 1, 0 ; Clear the watchdog while waiting for commands.
+n64_rx_command_end
+    n64_bus_copy N64_PIN, N64C_TRIS, byte_count, 0, 0
 
 
     ;; *******************************************************************************
     ;; ******************************************************  GameCube Interface  ***
     ;; *******************************************************************************
+
+    ;; Don't return until the GameCube data line has been idle long enough to ensure
+    ;; we aren't in the middle of a packet already.
+gamecube_wait_for_idle
+    movlw   0x50
+    movwf   temp, b
+gc_keep_waiting_for_idle
+    btfss   GAMECUBE_PIN, a
+    bra     gamecube_wait_for_idle
+    decfsz  temp, f, b
+    bra     gc_keep_waiting_for_idle
+    return
+
+    ;; Need to wait at least 15 us between GameCube controller commands.
+    ;; Wait 32 us to be safe.
+gamecube_bus_wait
+    bcf     PIR1, TMR1IF, a                      ; Clear overflow bit.
+    movlw   0xB0                                 ; Set single op R/W and 1:8 prescaler.
+    movwf   T1CON, a
+    setf    TMR1H, a
+    movlw   0xC0
+    movwf   TMR1L, a                             ; Clear timer1.
+    bsf     T1CON, TMR1ON, a                     ; Enable timer1 and
+    btfss   PIR1,  TMR1IF, a                     ; wait for timer1 overflow.
+    bra     $-2
+    bcf     PIR1, TMR1IF, a                      ; Clear overflow bit and
+    bcf     T1CON, TMR1ON, a                     ; disable timer1.
+    return
 
     ;; To support the WaveBird we must poll the controller identity first.
 gamecube_get_id
@@ -1386,18 +1422,20 @@ gamecube_get_id
     call    gamecube_rx
 
     btfss   gamecube_buffer + 0, 7, b            ; Check only the MSB of the first byte since it's enough
-    return                                       ; to tell between normal controller and WaveBird.
+    bra     gamecube_no_init                     ; to tell between normal controller and WaveBird receiver.
+                                                 ; No fancy init for wired controllers.
 
     movlw   0x02                                 ; WaveBird don't have rumble motor so we show to the N64
-    movwf   ctrl_slot_status, b                  ; that we are a controller with empty slot.
+    movwf   n64_slot_status, b                   ; that we are a controller with empty slot.
 
-    bsf     WAVEBIRD                             ; We have a WaveBird receiver connected and we check if
-    movf    gamecube_buffer, w, b                ; a WaveBird is associated with it.
-    xorlw   0xA8
-    btfsc   STATUS, Z, a
+    movf    gamecube_buffer + 0, w, b            ; We have a WaveBird receiver connected and we check if
+    xorlw   0xA8                                 ; a WaveBird is associated with it.
+    bz      gamecube_no_init
+    bsf     FLAG_CTRL_PENDING_INIT
     return
 
-    bsf     WAVEBIRD_ASSOCIATED                  ; WaveBird is associated and we save his unique id.
+gamecube_no_init
+    bsf     FLAG_CTRL_READY
     return
 
     ;; If we receive something other than 0xA8xxxx as ID we must repond with the WaveBird unique ID
@@ -1419,6 +1457,36 @@ gamecube_init_wavebird
     movwf   FSR1L, a
     movlw   3
     call    gamecube_rx
+
+    movf    flags, w, b
+    iorlw   BIT_CTRL_READY                       ; bsf     FLAG_CTRL_READY
+    andlw   ~BIT_CTRL_PENDING_INIT               ; bcf     FLAG_CTRL_PENDING_INIT
+    movwf   flags, b                             ; Set flags as atomic operations. Avoid disabling interrupt.
+    return
+
+    ;; GameCube controller init routine.
+gamecube_init
+    call    gamecube_get_id
+    btfsc   FLAG_CTRL_READY
+    bra     gamecube_ready
+    call    gamecube_bus_wait
+    btfss   FLAG_CTRL_PENDING_INIT
+    bra     gamecube_init
+    call    gamecube_init_wavebird
+gamecube_ready
+    call    gamecube_bus_wait
+    call    gamecube_poll_status
+    call    gamecube_reset_calibration
+
+    ;; Check if the user wants to disable Rumble Pak emulation on boot.
+    btfsc   gamecube_buffer + GC_D_RIGHT, b
+    clrf    n64_slot_status, b
+
+    ;; Check if the user wants to use the bypass mode on boot.
+    btfsc   gamecube_buffer + GC_D_UP, b
+    bsf     FLAG_BYPASS_MODE
+
+    call    gamecube_bus_wait
     return
 
     ;; Poll the GameCube controller's state by transmitting a magical
