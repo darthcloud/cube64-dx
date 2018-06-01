@@ -39,8 +39,8 @@
         CONFIG EBTR0 = OFF, EBTR1 = OFF
         CONFIG EBTRB = OFF
 
-        #define N64_PIN         PORTA, 5
-        #define N64_TRIS        TRISA, 5
+        #define N64_PIN         PORTB, 4
+        #define N64_TRIS        TRISB, 4
         #define GAMECUBE_PIN    PORTA, 4
         #define GAMECUBE_TRIS   TRISA, 4
         #define N64C_PIN        PORTA, 2
@@ -49,12 +49,14 @@
 
 io_init macro
         clrf    PORTA
-        clrf    WPUA        ; Disable pull-ups.
-        movlw   0x34        ; The three pins begin as inputs.
-        movwf   TRISA
-        clrf    PORTC       ; Debug port
-        clrf    TRISC       ; Debug port
-        clrf    ANSEL       ; Set IOs to digital.
+        clrf    PORTB
+        clrf    WPUA                             ; Disable pull-ups.
+        clrf    WPUB
+        setf    TRISA
+        setf    TRISB
+        clrf    PORTC                            ; Debug port
+        clrf    TRISC                            ; Debug port
+        clrf    ANSEL                            ; Set IOs to digital.
         clrf    ANSELH
         endm
 
