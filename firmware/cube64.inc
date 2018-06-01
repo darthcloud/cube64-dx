@@ -10,56 +10,56 @@
     ;;
 
     ;; The rumble motor should be on.
-    #define FLAG_RUMBLE_MOTOR_ON        flags, 0
+    #define FLAG_RUMBLE_MOTOR_ON        flags, 0, a
 
     ;; We're waiting for a button to be released, cleared when no buttons are pressed.
-    #define FLAG_WAITING_FOR_RELEASE    flags, 1
+    #define FLAG_WAITING_FOR_RELEASE    flags, 1, a
 
     ;; Flag for detecting when all buttons are released.
-    #define FLAG_NO_VIRTUAL_BTNS        flags, 2
+    #define FLAG_NO_VIRTUAL_BTNS        flags, 2, a
 
     ;; Flag for tracking if remap source is an axis.
-    #define FLAG_AXIS                   flags, 3
+    #define FLAG_AXIS                   flags, 3, a
 
     ;; Flag for button layout modification.
-    #define FLAG_LAYOUT_MODIFIER        flags, 4
+    #define FLAG_LAYOUT_MODIFIER        flags, 4, a
 
     ;; Is the GC controller a WaveBird?
-    #define WAVEBIRD                    flags, 5
+    #define WAVEBIRD                    flags, 5, a
 
     ;; WaveBird association state.
-    #define WAVEBIRD_ASSOCIATED         flags, 6
+    #define WAVEBIRD_ASSOCIATED         flags, 6, a
 
     ;; Adaptor bypass mode.
-    #define FLAG_BYPASS_MODE            flags, 7
+    #define FLAG_BYPASS_MODE            flags, 7, a
 
     ;; Flag to force reporting emptied slot.
-    #define FLAG_FORCE_EMPTIED          flags2, 0
+    #define FLAG_FORCE_EMPTIED          flags2, 0, a
 
     ;; Flag to control menu rumble feedback.
-    #define FLAG_RUMBLE_FEEDBACK        flags2, 1
+    #define FLAG_RUMBLE_FEEDBACK        flags2, 1, a
 
     ;; Set when we are waiting for item selection in the top config menu.
-    #define FLAG_TOP_CONFIG_MENU        menu_flags, 0
+    #define FLAG_TOP_CONFIG_MENU        menu_flags, 0, a
 
     ;; Set when we are waiting for user input in the adaptor mode submenu.
-    #define FLAG_MODE_SUBMENU           menu_flags, 1
+    #define FLAG_MODE_SUBMENU           menu_flags, 1, a
 
     ;; Set when we are waiting for user input in the button layout submenu.
-    #define FLAG_LAYOUT_SUBMENU         menu_flags, 2
+    #define FLAG_LAYOUT_SUBMENU         menu_flags, 2, a
 
     ;; Set when we're waiting for the source key for one of the combos.
-    #define FLAG_SOURCE_WAIT            menu_flags, 3
+    #define FLAG_SOURCE_WAIT            menu_flags, 3, a
 
     ;; Set when we're waiting for the destination key for one of the combos.
-    #define FLAG_REMAP                  menu_flags, 4
-    #define FLAG_SPECIAL                menu_flags, 5
+    #define FLAG_REMAP                  menu_flags, 4, a
+    #define FLAG_SPECIAL                menu_flags, 5, a
 
     ;; Set when we want to remap an analog trigger.
-    #define FLAG_TRIGGER                menu_flags, 6
+    #define FLAG_TRIGGER                menu_flags, 6, a
 
     ;; Set when we want to disable GC joysticks scaling.
-    #define NV_FLAG_SCALING_OFF         nv_flags, 2
+    #define NV_FLAG_SCALING_OFF         nv_flags, 2, a
 
     ;; Button IDs. These are a superset of the GameCube and N64, without any correspondence
     ;; with the wire protocol used by either. They're used as intermediate values when
@@ -151,10 +151,10 @@
 eeprom_btn_addr macro layout, byte
     mullw   EEPROM_BTN_BYTE                      ; Offset base on how many bytes per button.
     movff   PRODL, temp
-    movf    layout, w                            ; Add offset to read in right buttons layout.
+    movf    layout, w, a                         ; Add offset to read in right buttons layout.
     mullw   EEPROM_LAYOUT_SIZE
-    movf    PRODL, w
-    addwf   temp, w
+    movf    PRODL, w, a
+    addwf   temp, w, a
     if byte
         addlw   byte
     endif
