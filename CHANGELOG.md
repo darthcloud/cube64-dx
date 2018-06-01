@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.3] - 2018-06-01
+### Added
+ - Interrupt based reply.
+
+## [3.2] - 2018-06-01
+### Changed
+ - N64 controller pin on PORTB.
+ - Joystick scaling menu option.
+
 ## [3.1] - 2018-02-05
 ### Added
  - Slot bypass mode. (Fixes #10)
