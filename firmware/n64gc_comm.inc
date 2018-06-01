@@ -164,9 +164,9 @@ three--
     #define N64_JOYSTICK_Y  3
 
     ;; Debug
-    ;#define DBG_CRC
-    ;#define DBG_SI
-    ;#define DBG_TRACE
+    ;;#define DBG_CRC
+    ;;#define DBG_SI
+    ;;#define DBG_TRACE
 
 n64gc_init macro
     ;; Put us back in bank 0 with a bit_count of 8, preconditions for rx_buffer
@@ -198,14 +198,14 @@ n64gc_tx_buffer macro port, bit, wide_stop_bit
     local   not_last_bit
     local   a, b
 
-    movwf   byte_count       ; Stow our count and start looping over bytes.
+    movwf   byte_count                           ; Stow our count and start looping over bytes.
 
-    movlw   8                ; Set the bit count for the first time. Subsequently
-    movwf   bit_count        ; it gets set in the spare cycles below.
+    movlw   8                                    ; Set the bit count for the first time. Subsequently
+    movwf   bit_count                            ; it gets set in the spare cycles below.
 
     mulwf   byte_count
-    movff   PRODL, TBLPTRL   ; Wrap to 0xFF once at 31 bytes left.
-    subwf   TBLPTRL          ; Subtract CRC bits.
+    movff   PRODL, TBLPTRL                       ; Wrap to 0xFF once at 31 bytes left.
+    subwf   TBLPTRL                              ; Subtract CRC bits.
     ifdef DBG_SI
        movff   INDF1, PORTC
     endif
@@ -216,84 +216,84 @@ n64gc_tx_buffer macro port, bit, wide_stop_bit
     ;; nested loops for bits and bytes, so we use the time during a bit to prepare
     ;; for the next bit. This is implemented in the form of three alternate endings
     ;; for the loop.
-bit_loop                     ; 3.1250us
-    wait    .5               ; 3.1875us
-    decf    TBLPTRL, f       ; 3.3500us  --CRC table pointer.
-    btfss   STATUS, C        ; 3.5625us  First bit of 32 bytes packet?
-    setf    crc_work         ; 3.6250us  If so reset CRC to 0xFF.
-    TBLRD*                   ; 3.6875us  Load value in the table latch.
-    movf    TABLAT, w        ; 3.8125us
-    btfsc   INDF1, 7         ; 3.8750us  If bit set, XOR table value with CRC.
-    xorwf   crc_work, f      ; 3.9375us
+bit_loop                                         ; 3.1250us
+    wait    .5                                   ; 3.1875us
+    decf    TBLPTRL, f                           ; 3.3500us  --CRC table pointer.
+    btfss   STATUS, C                            ; 3.5625us  First bit of 32 bytes packet?
+    setf    crc_work                             ; 3.6250us  If so reset CRC to 0xFF.
+    TBLRD*                                       ; 3.6875us  Load value in the table latch.
+    movf    TABLAT, w                            ; 3.8125us
+    btfsc   INDF1, 7                             ; 3.8750us  If bit set, XOR table value with CRC.
+    xorwf   crc_work, f                          ; 3.9375us
 
-    bcf     port, bit        ; 0.0000us  The falling edge begins another bit.
-    tstfsz  TBLPTRL          ; 0.0625us  Ready to load CRC in last buffer?
-    goto    a                ; 0.1250us  Nop...
-    ;; nop (goto 2nd word)   ; b: 0.1875us  Yes!
-    movf    crc_work, w      ; b: 0.2500us
-    xorwf   n64_crc          ; b: 0.3125us
-    goto    b                ; b: 0.3750us
-a                            ; a: 0.1875us  Make sure we spend the same amount
-    wait    .4               ; a: 0.2500us  of time in both paths.
-b                            ; b: 0.4375us
-    wait    .4               ; 0.5000us
+    bcf     port, bit                            ; 0.0000us  The falling edge begins another bit.
+    tstfsz  TBLPTRL                              ; 0.0625us  Ready to load CRC in last buffer?
+    goto    a                                    ; 0.1250us  Nop...
+    ;; nop (goto 2nd word)                       ; b: 0.1875us  Yes!
+    movf    crc_work, w                          ; b: 0.2500us
+    xorwf   n64_crc                              ; b: 0.3125us
+    goto    b                                    ; b: 0.3750us
+a                                                ; a: 0.1875us  Make sure we spend the same amount
+    wait    .4                                   ; a: 0.2500us  of time in both paths.
+b                                                ; b: 0.4375us
+    wait    .4                                   ; 0.5000us
 
-    ifdef DBG_CRC            ; 0.7500us
+    ifdef DBG_CRC                                ; 0.7500us
         movff   crc_work, PORTC
     else
         wait    .2
     endif
 
-    rlcf    INDF1, f        ; 0.8750us  Rotate the next bit into C.
-    btfsc   STATUS, C       ; 0.9375us  Our bit is in the C flag...
-    bsf     port, bit       ; 1.0000us  Rising edge for 1 bits.
-    decfsz  bit_count, f    ; 1.0625us  Is this the last bit?
-    goto    not_last_bit    ; 1.1250us  We have an alternate ending for the last bit...
-    ;; nop (goto 2nd word)  ; 1.1875us
+    rlcf    INDF1, f                             ; 0.8750us  Rotate the next bit into C.
+    btfsc   STATUS, C                            ; 0.9375us  Our bit is in the C flag...
+    bsf     port, bit                            ; 1.0000us  Rising edge for 1 bits.
+    decfsz  bit_count, f                         ; 1.0625us  Is this the last bit?
+    goto    not_last_bit                         ; 1.1250us  We have an alternate ending for the last bit...
+    ;; nop (goto 2nd word)                       ; 1.1875us
 
-    decfsz  byte_count, f   ; 1.2500us  Is this the last byte?
-    goto    not_last_byte   ; 1.3125us  Yet another alternate ending for the last byte...
-    ;; nop (goto 2nd word)  ; 1.3750us
+    decfsz  byte_count, f                        ; 1.2500us  Is this the last byte?
+    goto    not_last_byte                        ; 1.3125us  Yet another alternate ending for the last byte...
+    ;; nop (goto 2nd word)                       ; 1.3750us
 
-    wait    .24             ; 1.4375us
-    btfss   STATUS, C       ; 2.9375us
-    bsf     port, bit       ; 3.0000us  Rising edge for 0 bits.
-    wait    .15             ; 3.0625us
-    bcf     port, bit       ; 0.0000us  Begin a stop bit.
-    wait    .13             ; 0.0625us
-    movlw   8               ; 0.8750us  Setup for the next receive.
-    movwf   bit_count       ; 0.9375us
+    wait    .24                                  ; 1.4375us
+    btfss   STATUS, C                            ; 2.9375us
+    bsf     port, bit                            ; 3.0000us  Rising edge for 0 bits.
+    wait    .15                                  ; 3.0625us
+    bcf     port, bit                            ; 0.0000us  Begin a stop bit.
+    wait    .13                                  ; 0.0625us
+    movlw   8                                    ; 0.8750us  Setup for the next receive.
+    movwf   bit_count                            ; 0.9375us
 
     if wide_stop_bit
-        wait    .16         ; Use a 2 us stop bit rather than 1 us, waste 16 cycles.
+        wait    .16                              ; Use a 2 us stop bit rather than 1 us, waste 16 cycles.
     endif
 
-    bsf     port, bit       ; 1.0000us  Rising edge for the stop bit.
-    return                  ; 1.0625us  Done for now. The first instruction after the
-                            ; macro is at 1.6 us after the beginning of the
-                            ; stop bit, so it ends 2.4 us after we return.
+    bsf     port, bit                            ; 1.0000us  Rising edge for the stop bit.
+    return                                       ; 1.0625us  Done for now. The first instruction after the
+                                                 ; macro is at 1.6 us after the beginning of the
+                                                 ; stop bit, so it ends 2.4 us after we return.
 
-not_last_byte               ; 1.3750us
+not_last_byte                                    ; 1.3750us
     ifdef DBG_SI
         wait    .19
     else
-        wait    .21         ; 1.4375us
+        wait    .21                              ; 1.4375us
     endif
-    incf    FSR1L, f        ; 2.7500us  Point at the next byte.
+    incf    FSR1L, f                             ; 2.7500us  Point at the next byte.
     ifdef DBG_SI
        movff   INDF1, PORTC
     endif
-    movlw   8               ; 2.8125us  Reinitialize the bit counter.
-    movwf   bit_count       ; 2.8750us
-    btfss   STATUS, C       ; 2.9375us
-    bsf     port, bit       ; 3.0000us  Rising edge for 0 bits.
-    goto    bit_loop        ; 3.0625us
+    movlw   8                                    ; 2.8125us  Reinitialize the bit counter.
+    movwf   bit_count                            ; 2.8750us
+    btfss   STATUS, C                            ; 2.9375us
+    bsf     port, bit                            ; 3.0000us  Rising edge for 0 bits.
+    goto    bit_loop                             ; 3.0625us
 
-not_last_bit                ; 1.1875us
-    wait    .27             ; 1.2500us
-    btfss   STATUS, C       ; 2.9375us
-    bsf     port, bit       ; 3.0000us  Rising edge for 0 bits.
-    goto    bit_loop        ; 3.0625us  Next bit...
+not_last_bit                                     ; 1.1875us
+    wait    .27                                  ; 1.2500us
+    btfss   STATUS, C                            ; 2.9375us
+    bsf     port, bit                            ; 3.0000us  Rising edge for 0 bits.
+    goto    bit_loop                             ; 3.0625us  Next bit...
     endm
 
 
@@ -329,71 +329,71 @@ n64gc_rx_buffer macro port, bit, byte_count, clear_watchdog
     ;; The overhead from sampling to the beginning of the next poll needs to
     ;; be less than 2us (32 cycles).
 
-    movlw   8               ; Init address for CRC table.
+    movlw   8                                    ; Init address for CRC table.
     mulwf   byte_count
-    movff   PRODL, TBLPTRL  ; Use only low byte, will wrap to 0xFF once at 31 bytes left.
+    movff   PRODL, TBLPTRL                       ; Use only low byte, will wrap to 0xFF once at 31 bytes left.
 bit_loop
     if clear_watchdog
         clrwdt
     endif
 
-    btfsc   port, bit       ; 0.0000us  Poll for the beginning of the bit, max 0.1875us jitter.
-    goto    bit_loop        ; 0.0625us
-    ;; nop (goto 2nd word)  ; 0.1250us
+    btfsc   port, bit                            ; 0.0000us  Poll for the beginning of the bit, max 0.1875us jitter.
+    goto    bit_loop                             ; 0.0625us
+    ;; nop (goto 2nd word)                       ; 0.1250us
 
-    wait    .14             ; 0.1875us
-    decf    TBLPTRL, f      ; 1.0625us  --CRC table pointer.
-    btfss   STATUS, C       ; 1.1250us  First bit of 32 bytes packet?
-    setf    crc_work        ; 1.1875us  If so reset CRC to 0xFF.
-    TBLRD*                  ; 1.2500us  Load value in the table latch.
+    wait    .14                                  ; 0.1875us
+    decf    TBLPTRL, f                           ; 1.0625us  --CRC table pointer.
+    btfss   STATUS, C                            ; 1.1250us  First bit of 32 bytes packet?
+    setf    crc_work                             ; 1.1875us  If so reset CRC to 0xFF.
+    TBLRD*                                       ; 1.2500us  Load value in the table latch.
 
-    rlcf    INDF1, f        ; 1.3750us  Make room for the new bit.
-    bcf     INDF1, 0        ; 1.4375us  Assume it's 0 to begin with.
-    decfsz  bit_count, f    ; 1.5000us  Is this the last bit?
-    goto    not_last_bit    ; 1.5625us  We have an alternate ending for the last bit...
-    ;; nop (goto 2nd word)  ; 1.6250us
+    rlcf    INDF1, f                             ; 1.3750us  Make room for the new bit.
+    bcf     INDF1, 0                             ; 1.4375us  Assume it's 0 to begin with.
+    decfsz  bit_count, f                         ; 1.5000us  Is this the last bit?
+    goto    not_last_bit                         ; 1.5625us  We have an alternate ending for the last bit...
+    ;; nop (goto 2nd word)                       ; 1.6250us
 
-    wait    .3              ; 1.6875us
-    movlw   8               ; 1.8750us  Reset bit count.
-    movwf   bit_count       ; 1.9375us
-    btfsc   port, bit       ; 2.0000us  Sample the incoming bit.
-    bsf     INDF1, 0        ; 2.0625us
-    movf    TABLAT, w       ; 2.1250us
-    btfsc   INDF1, 0        ; 2.1875us
-    xorwf   crc_work, f     ; 2.2500us  If bit set, XOR table value with CRC.
+    wait    .3                                   ; 1.6875us
+    movlw   8                                    ; 1.8750us  Reset bit count.
+    movwf   bit_count                            ; 1.9375us
+    btfsc   port, bit                            ; 2.0000us  Sample the incoming bit.
+    bsf     INDF1, 0                             ; 2.0625us
+    movf    TABLAT, w                            ; 2.1250us
+    btfsc   INDF1, 0                             ; 2.1875us
+    xorwf   crc_work, f                          ; 2.2500us  If bit set, XOR table value with CRC.
     ifdef DBG_CRC
         movff   crc_work, PORTC
     endif
     ifdef DBG_SI
         movff   INDF1, PORTC
     endif
-    decfsz  byte_count, f   ; 2.3125us  Is this the last byte?
-    goto    not_last_byte   ; 2.3750us  Yet another alternate ending for the last byte...
-    ;; nop (goto 2nd word)  ; 2.4375us
+    decfsz  byte_count, f                        ; 2.3125us  Is this the last byte?
+    goto    not_last_byte                        ; 2.3750us  Yet another alternate ending for the last byte...
+    ;; nop (goto 2nd word)                       ; 2.4375us
 
-    return                  ; 2.5000us
+    return                                       ; 2.5000us
 
-not_last_byte               ; 2.4375us
-    incf    FSR1L, f        ; 2.5000us  Next byte...
-    btfsc   port, bit       ; 2.5625us  Wait for the data line to go back high.
-    goto    bit_loop        ; 2.6250us
-    ;; nop (goto 2nd word)  ; 2.6875us
-    goto    $-6             ; 2.7500us
+not_last_byte                                    ; 2.4375us
+    incf    FSR1L, f                             ; 2.5000us  Next byte...
+    btfsc   port, bit                            ; 2.5625us  Wait for the data line to go back high.
+    goto    bit_loop                             ; 2.6250us
+    ;; nop (goto 2nd word)                       ; 2.6875us
+    goto    $-6                                  ; 2.7500us
 
-not_last_bit                ; 1.6250us
-    wait    .5              ; 1.6875us
-    btfsc   port, bit       ; 2.0000us  Sample the incoming bit.
-    bsf     INDF1, 0        ; 2.0625us
-    movf    TABLAT, w       ; 2.1250us
-    btfsc   INDF1, 0        ; 2.1875us
-    xorwf   crc_work, f     ; 2.2500us  If bit set, XOR table value with CRC.
+not_last_bit                                     ; 1.6250us
+    wait    .5                                   ; 1.6875us
+    btfsc   port, bit                            ; 2.0000us  Sample the incoming bit.
+    bsf     INDF1, 0                             ; 2.0625us
+    movf    TABLAT, w                            ; 2.1250us
+    btfsc   INDF1, 0                             ; 2.1875us
+    xorwf   crc_work, f                          ; 2.2500us  If bit set, XOR table value with CRC.
     ifdef DBG_CRC
         movff   crc_work, PORTC
     endif
-    btfsc   port, bit       ; 2.3125us  Wait for the data line to go back high.
-    goto    bit_loop        ; 2.3750us
-    ;; nop (goto 2nd word)  ; 2.4375us
-    goto    $-6             ; 2.5000us
+    btfsc   port, bit                            ; 2.3125us  Wait for the data line to go back high.
+    goto    bit_loop                             ; 2.3750us
+    ;; nop (goto 2nd word)                       ; 2.4375us
+    goto    $-6                                  ; 2.5000us
     endm
 
 
@@ -410,36 +410,36 @@ bit_loop
         clrwdt
     endif
 
-    btfsc   port, bit       ; 0.0000us  Poll for the beginning of the bit, max 0.1875us jitter.
-    goto    bit_loop        ; 0.0625us
-    ;; nop (goto 2nd word)  ; 0.1250us
-    bsf     port2, bit2     ; 0.1875us  *3.0000us Copy's last bit 'zero bit' rising edge.
-    wait    .13             ; 0.2500us
-    rlcf    INDF1, f        ; 1.0625us  Make room for the new bit.
-    bcf     INDF1, 0        ; 1.1250us  Assume it's 0 to begin with.
-    bcf     port2, bit2     ; 1.1875us  *0.0000us Copy's next bit falling edge.
-    decfsz  bit_count, f    ; 1.2500us  Is this the last bit?
-    goto    not_last_bit    ; 1.3125us  We have an alternate ending for the last bit...
-    ;; nop (goto 2nd word)  ; 1.3750us
+    btfsc   port, bit                            ; 0.0000us  Poll for the beginning of the bit, max 0.1875us jitter.
+    goto    bit_loop                             ; 0.0625us
+    ;; nop (goto 2nd word)                       ; 0.1250us
+    bsf     port2, bit2                          ; 0.1875us  *3.0000us Copy's last bit 'zero bit' rising edge.
+    wait    .13                                  ; 0.2500us
+    rlcf    INDF1, f                             ; 1.0625us  Make room for the new bit.
+    bcf     INDF1, 0                             ; 1.1250us  Assume it's 0 to begin with.
+    bcf     port2, bit2                          ; 1.1875us  *0.0000us Copy's next bit falling edge.
+    decfsz  bit_count, f                         ; 1.2500us  Is this the last bit?
+    goto    not_last_bit                         ; 1.3125us  We have an alternate ending for the last bit...
+    ;; nop (goto 2nd word)                       ; 1.3750us
 
-    decfsz  byte_count,f    ; 1.4375us  Is this the last byte?
-    goto    not_last_byte   ; 1.5000us  Yet another alternate ending for the last byte...
-    ;; nop (goto 2nd word)  ; 1.5625us
+    decfsz  byte_count,f                         ; 1.4375us  Is this the last byte?
+    goto    not_last_byte                        ; 1.5000us  Yet another alternate ending for the last byte...
+    ;; nop (goto 2nd word)                       ; 1.5625us
 
-    movlw   8               ; 1.6250us  Reset bit count.
-    movwf   bit_count       ; 1.6875us
-    wait    .4              ; 1.7500us
-    btfsc   port, bit       ; 2.0000us  Sample the incoming bit.
-    bsf     INDF1, 0        ; 2.0625us
-    btfsc   INDF1, 0        ; 2.1250us
-    bsf     port2, bit2     ; 2.1875us  *1.0000us Copy's 'one bit' rising edge.
+    movlw   8                                    ; 1.6250us  Reset bit count.
+    movwf   bit_count                            ; 1.6875us
+    wait    .4                                   ; 1.7500us
+    btfsc   port, bit                            ; 2.0000us  Sample the incoming bit.
+    bsf     INDF1, 0                             ; 2.0625us
+    btfsc   INDF1, 0                             ; 2.1250us
+    bsf     port2, bit2                          ; 2.1875us  *1.0000us Copy's 'one bit' rising edge.
     if stop_bit
-        wait    .31         ; *1.0625us
-        bsf     port2, bit2 ; *3.0000us Copy's 'zero bit' rising edge.
-        wait    .15         ; *3.0625us
-        bcf     port2, bit2 ; *4.0000us Copy's stop bit.
-        wait    .31         ; *4.0625us
-        bsf     port2, bit2 ; *6.0000us
+        wait    .31                              ; *1.0625us
+        bsf     port2, bit2                      ; *3.0000us Copy's 'zero bit' rising edge.
+        wait    .15                              ; *3.0625us
+        bcf     port2, bit2                      ; *4.0000us Copy's stop bit.
+        wait    .31                              ; *4.0625us
+        bsf     port2, bit2                      ; *6.0000us
     ifdef DBG_TRACE
         movff   INDF1, PORTC
     endif
@@ -450,35 +450,35 @@ bit_loop
         goto    n64_wait_for_command
     endif
 
-    return                  ; 2.2500us
+    return                                       ; 2.2500us
 
-not_last_byte               ; 1.5625us
-    wait    .5              ; 1.6250us
-    movlw   8               ; 1.9375us
-    btfsc   port, bit       ; 2.0000us  Sample the incoming bit.
-    bsf     INDF1, 0        ; 2.0625us
-    btfsc   INDF1, 0        ; 2.1250us
-    bsf     port2, bit2     ; 2.1875us  *1.0000us Copy's 'one bit' rising edge.
+not_last_byte                                    ; 1.5625us
+    wait    .5                                   ; 1.6250us
+    movlw   8                                    ; 1.9375us
+    btfsc   port, bit                            ; 2.0000us  Sample the incoming bit.
+    bsf     INDF1, 0                             ; 2.0625us
+    btfsc   INDF1, 0                             ; 2.1250us
+    bsf     port2, bit2                          ; 2.1875us  *1.0000us Copy's 'one bit' rising edge.
     ifdef DBG_TRACE
         movff   INDF1, PORTC
     endif
-    incf    FSR1L, f        ; 2.2500us  Next byte...
-    movwf   bit_count       ; 2.3125us  Reset bit count.
-    btfsc   port, bit       ; 2.3750us  Wait for the data line to go back high.
-    goto    bit_loop        ; 2.4375us
-    ;; nop (goto 2nd word)  ; 2.5000us
-    goto    $-6             ; 2.5625us
+    incf    FSR1L, f                             ; 2.2500us  Next byte...
+    movwf   bit_count                            ; 2.3125us  Reset bit count.
+    btfsc   port, bit                            ; 2.3750us  Wait for the data line to go back high.
+    goto    bit_loop                             ; 2.4375us
+    ;; nop (goto 2nd word)                       ; 2.5000us
+    goto    $-6                                  ; 2.5625us
 
-not_last_bit                ; 1.3125us
-    wait    .10             ; 1.3750us
-    btfsc   port, bit       ; 2.0000us  Sample the incoming bit.
-    bsf     INDF1, 0        ; 2.0625us
-    btfsc   INDF1, 0        ; 2.1250us
-    bsf     port2, bit2     ; 2.1875us  *1.0000us Copy's 'one bit' rising edge.
-    btfsc   port, bit       ; 2.2500us  Wait for the data line to go back high.
-    goto    bit_loop        ; 2.3125us
-    ;; nop (goto 2nd word)  ; 2.3750us
-    goto    $-6             ; 2.4375us
+not_last_bit                                     ; 1.3125us
+    wait    .10                                  ; 1.3750us
+    btfsc   port, bit                            ; 2.0000us  Sample the incoming bit.
+    bsf     INDF1, 0                             ; 2.0625us
+    btfsc   INDF1, 0                             ; 2.1250us
+    bsf     port2, bit2                          ; 2.1875us  *1.0000us Copy's 'one bit' rising edge.
+    btfsc   port, bit                            ; 2.2500us  Wait for the data line to go back high.
+    goto    bit_loop                             ; 2.3125us
+    ;; nop (goto 2nd word)                       ; 2.3750us
+    goto    $-6                                  ; 2.4375us
     endm
 
     ;;; The End ;;;

@@ -149,9 +149,9 @@
 
     ;; Convert virtual button in w to eeprom byte address in w.
 eeprom_btn_addr macro layout, byte
-    mullw   EEPROM_BTN_BYTE         ; Offset base on how many bytes per button.
+    mullw   EEPROM_BTN_BYTE                      ; Offset base on how many bytes per button.
     movff   PRODL, temp
-    movf    layout, w               ; Add offset to read in right buttons layout.
+    movf    layout, w                            ; Add offset to read in right buttons layout.
     mullw   EEPROM_LAYOUT_SIZE
     movf    PRODL, w
     addwf   temp, w
