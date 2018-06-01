@@ -873,11 +873,15 @@ accept_layout_select
 
 check_js_toggle
     movf    remap_source_button, w
+    andlw   ~0x01
     xorlw   BTN_X
-    btfss   STATUS, Z
+    bz      accept_js_select
     return
-    btg     NV_FLAG_SCALING_OFF
 
+accept_js_select
+    bcf     NV_FLAG_SCALING_OFF
+    btfsc   remap_source_button, 0     ; BTN_Y disable scaling, BTN_X enable it.
+    bsf     NV_FLAG_SCALING_OFF
 write_nv_flags
     movff   nv_flags, EEDATA
     movlw   EEPROM_NV_FLAGS
