@@ -177,7 +177,7 @@ To toggle on/off the scaling function on a global basis (affect all mapping):
 
   2. If you have the rumble power connected, you should feel a brief rumble.
 
-  3. Press X to toggle on/off the scaling function.
+  3. Press X to enable or Y to disable the scaling function.
 
   4. If you have the rumble power connected and the layout change was successful, you should
      feel a brief rumble.
