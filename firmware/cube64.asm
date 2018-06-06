@@ -41,6 +41,8 @@
 
         #define N64_PIN         PORTB, 4
         #define N64_TRIS        TRISB, 4
+        #define N64_PIN2        PORTB, 5
+        #define N64_TRIS2       TRISB, 5
         #define GAMECUBE_PIN    PORTA, 4
         #define GAMECUBE_TRIS   TRISA, 4
         #define N64C_PIN        PORTA, 2
@@ -51,13 +53,15 @@ io_init macro
         clrf    PORTB, a
         clrf    WPUA, a                          ; Disable pull-ups.
         clrf    WPUB, a
-        bsf     IOCB, IOCB4, a                   ; Enable interrupt on N64_PIN.
         setf    TRISA, a
         setf    TRISB, a
         clrf    PORTC, a                         ; Debug port
         clrf    TRISC, a                         ; Debug port
         clrf    ANSEL, a                         ; Set IOs to digital.
         clrf    ANSELH, a
+        bsf     IOCB, IOCB4, a                   ; Enable interrupt on N64_PIN.
+        btfsc   N64_PIN2, a                      ; If 2nd port connected,
+        bsf     IOCB, IOCB5, a                   ; enable interrupt on N64_PIN2.
         endm
 
     else
@@ -84,15 +88,17 @@ pll_startup_delay macro
     org 0x00
     goto    startup
     org 0x08
-    n64_rx_command_start
-    call    n64_rx_command_end
+    clrf    STKPTR, a
+    call    n64_rx_command
     call    n64_detect_command
     call    n64_reinit
     goto    int_reentry
 
-    ;; Variables accessed through Direct Addressing Mode. (Bank 0)
-    ;; We keep a single copy of those variables.
+    ;; Variables.
     cblock 0x00
+        n64_status_buffer:0
+        n64_status_buffer0:4
+        n64_status_buffer1:4
         flags
         flags2
         menu_flags
@@ -132,14 +138,6 @@ pll_startup_delay macro
         gamecube_scale:8                         ; bytes of gc_scale as it allows using the same macro for both buffers.
     endc
 
-    ;; Variables accessed through Indexed Literal Offset Mode. (Bank 1)
-    ;; This allows toggling between 2 copies of those variables via FSR2.
-    cblock  0x00
-        n64_status_buffer:0
-        n64_status_buffer0:4
-        n64_status_buffer1:4
-    endc
-
 
     ;; *******************************************************************************
     ;; ******************************************************  Initialization  *******
@@ -147,8 +145,7 @@ pll_startup_delay macro
 
 startup
     movlb   0x00                                 ; Set bank 0 active for non-mirrored data.
-    movlw   0x01
-    movwf   FSR2H, a
+    clrf    FSR2H, a
     clrf    FSR2L, a
     bcf     INTCON, GIE, a                       ; Init interrupts.
     bsf     INTCON, RABIE, a
@@ -202,6 +199,7 @@ int_reentry
     nop
     bcf     INTCON, RABIF, a
     bsf     INTCON, GIEH, a
+    call    gamecube_wait_for_idle
 main_loop
     clrwdt
     call    update_rumble_feedback               ; Give feedback for remapping operations using the rumble motor.
@@ -332,6 +330,11 @@ map_button_to macro virtual, dest_byte, dest_bit
     btfss   STATUS, Z, a
     goto    next
     bsf     n64_status_buffer + dest_byte, dest_bit, a
+    if dest_byte == 1 && dest_bit == 4
+        incf    FSR2H, f, a
+        bsf     n64_status_buffer + N64_Z, a
+        clrf    FSR2H, a
+    endif
     return
 next
     endm
@@ -424,6 +427,7 @@ map_axis_to macro virtual, dest_byte
     endif
     negf    temp2, b                             ; Two's complement buffer if sign mismatch.
     assign_greater_abs_value temp2, n64_status_buffer + dest_byte
+    clrf    FSR2H, a
     return
 next
     endm
@@ -514,6 +518,12 @@ n64_translate_restart
     clrf    n64_status_buffer + 1, a
     clrf    n64_status_buffer + 2, a
     clrf    n64_status_buffer + 3, a
+    incf    FSR2H, f, a
+    clrf    n64_status_buffer + 0, a             ; Start out with everything zeroed...
+    clrf    n64_status_buffer + 1, a
+    clrf    n64_status_buffer + 2, a
+    clrf    n64_status_buffer + 3, a
+    clrf    FSR2H, a
     bsf     FLAG_NO_VIRTUAL_BTNS
 
     map_button_from     GC_A,       BTN_A
@@ -592,6 +602,13 @@ set_virtual_axis
     map_axis_to     BTN_LJ_RIGHT,   N64_JOYSTICK_X
     map_axis_to     BTN_LJ_DOWN,    N64_JOYSTICK_Y
     map_axis_to     BTN_LJ_UP,      N64_JOYSTICK_Y
+
+    incf    FSR2H, f, a
+    map_axis_to     BTN_RJ_LEFT,    N64_JOYSTICK_X
+    map_axis_to     BTN_RJ_RIGHT,   N64_JOYSTICK_X
+    map_axis_to     BTN_RJ_DOWN,    N64_JOYSTICK_Y
+    map_axis_to     BTN_RJ_UP,      N64_JOYSTICK_Y
+    clrf    FSR2H, a
     return
 
     ;; This is called by remap_virtual_button to convert a virtual button code,
@@ -1091,16 +1108,19 @@ update_slot_empty_timer
 
 n64_reinit
     clrf    FSR1H, a
+    clrf    FSR2H, a
     btg     FSR2L, 2, a
     bsf     N64C_TRIS, a
 
     bcf     FLAG_AXIS
     bcf     FLAG_LAYOUT_MODIFIER
-    call    gamecube_wait_for_idle
+    bcf     FLAG_CTRL2
     return
 
     ;; Service commands coming in from the N64
 n64_detect_command
+    btfsc   FLAG_CTRL2
+    bra     n64_detect_base_cmd
 
 ifndef DBG_TRACE
     btfsc   FLAG_BYPASS_MODE
@@ -1136,6 +1156,7 @@ endif
 
     bsf     N64C_TRIS, a                         ; Reset bypass bus state.
 
+n64_detect_base_cmd
     movf    n64_command, w, b                    ; Check for both identity cmd (0x00 & 0xFF) at the same time.
     btfss   STATUS, Z, a
     comf    n64_command, w, b
@@ -1337,6 +1358,8 @@ n64_send_id
     movwf   n64_id_buffer + 0, b
     clrf    n64_id_buffer + 1, b
     movff   n64_slot_status, n64_id_buffer + 2
+    btfsc   FLAG_CTRL2
+    clrf    n64_id_buffer + 2, b
 
     movlw   n64_id_buffer                        ; Transmit the ID buffer
     movwf   FSR1L, a
@@ -1359,10 +1382,17 @@ keep_waiting_for_idle
     ;; been left high by a read-modify-write operation elsewhere.
     ;; For controller response we allways need an 2us stop bit.
 n64_tx
-    wait    .55
+    wait    .53
+    btfsc   FLAG_CTRL2
+    bra     n64_tx2
     bsf     N64_TRIS, a
     bcf     N64_PIN, a
     n64gc_tx_buffer N64_TRIS, 1
+
+n64_tx2
+    bsf     N64_TRIS2, a
+    bcf     N64_PIN2, a
+    n64gc_tx_buffer N64_TRIS2, 1
 
 n64_rx_bus
     n64gc_rx_buffer N64_PIN, bus_byte_count, 0
@@ -1370,8 +1400,14 @@ n64_rx_bus
 n64_rx_address
     n64gc_rx_buffer N64_PIN, byte_count, 0
 
-n64_rx_command_end
+n64_rx_command
+    btfsc   N64_PIN, a
+    bra     n64_rx_command2
+    n64_rx_command_start 1
     n64_bus_copy N64_PIN, N64C_TRIS, byte_count, 0, 0
+n64_rx_command2
+    n64_rx_command_start 0
+    n64gc_rx_buffer N64_PIN2, byte_count, 0
 
 
     ;; *******************************************************************************

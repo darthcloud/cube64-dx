@@ -45,6 +45,10 @@
     #define BIT_LAYOUT_MODIFIER         0x02
     #define FLAG_LAYOUT_MODIFIER        flags2, 1, b
 
+    ;; Flag for N64 CTRL2.
+    #define BIT_CTRL2                   0x04
+    #define FLAG_CTRL2                  flags2, 2, b
+
     ;; Set when we are waiting for item selection in the top config menu.
     #define BIT_TOP_CONFIG_MENU         0x01
     #define FLAG_TOP_CONFIG_MENU        menu_flags, 0, b
