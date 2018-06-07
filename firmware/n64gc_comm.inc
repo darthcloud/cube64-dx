@@ -398,32 +398,49 @@ not_last_bit                                     ; 1.6250us
 
     ;; We get late into the first bit around 0.4 us. Use the spare cycle to init
     ;; pretty much everything.
-n64_rx_command_start macro
-    wait    .11                                  ; 0.3750us  We get into the interrupt at around 0.4 us.
+n64_rx_command_start macro ctrl1
+    wait    .5                                   ; 0.6875us  We get into the interrupt at around 0.4 us.
+    clrf    FSR2H, a                             ; 1.0000us  Point to buffers on bank 0.
     bsf     GAMECUBE_TRIS                        ; 1.0625us
-    bcf     N64C_PIN                             ; 1.1250us  Finish secondary port setup.
-    bcf     N64C_TRIS                            ; 1.1875us  *0.0000us Copy's next bit falling edge.
-    wait    .3                                   ; 1.2500us
-    clrf    FSR1H, a                             ; 1.4375us
-    movlw   n64_command                          ; 1.5000us
-    movwf   FSR1L, a                             ; 1.5625us
-    btg     FSR2L, 2, a                          ; 1.6250us Use last good regs copy.
-    clrf    STKPTR, a                            ; 1.6875us
+    if ctrl1
+        bcf     N64C_PIN                         ; 1.1250us  Finish secondary port setup.
+        bcf     N64C_TRIS                        ; 1.1875us  *0.0000us Copy's next bit falling edge.
+    else
+        bsf     FLAG_CTRL2                       ; 1.1250us  2nd controller poll.
+        incf    FSR2H, f, a                      ; 1.1875us  Point to buffers on bank 1.
+    endif
+    wait    .4                                   ; 1.2500us
+    clrf    FSR1H, a                             ; 1.5000us
+    movlw   n64_command                          ; 1.5625us
+    movwf   FSR1L, a                             ; 1.6250us
+    btg     FSR2L, 2, a                          ; 1.6875us  Use last good regs copy.
     movlw   high crc_large_table                 ; 1.7500us  Load CRC table high address byte
     movwf   TBLPTRH, a                           ; 1.8125us  with spare time.
     rlcf    INDF1, f, a                          ; 1.8750us  Make room for the new bit.
     bcf     INDF1, 0, a                          ; 1.9375us  Assume it's 0 to begin with.
-    btfsc   N64_PIN                              ; 2.0000us  Sample the incoming bit.
+    if ctrl1
+        btfsc   N64_PIN                          ; 2.0000us  Sample the incoming bit.
+    else
+        btfsc   N64_PIN2                         ; 2.0000us  Sample the incoming bit.
+    endif
     bsf     INDF1, 0, a                          ; 2.0625us
-    btfsc   INDF1, 0, a                          ; 2.1250us
-    bsf     N64C_TRIS                            ; 2.1875us  *1.0000us Copy's 'one bit' rising edge.
+    if ctrl1
+        btfsc   INDF1, 0, a                      ; 2.1250us
+        bsf     N64C_TRIS                        ; 2.1875us  *1.0000us Copy's 'one bit' rising edge.
+    else
+        wait    .2                               ; 2.1250us
+    endif
     movlw   7                                    ; 2.2500us  We just did first bit, 7 remaining.
     movwf   bit_count, b                         ; 2.3125us
     movlw   .1                                   ; 2.3750us
     movwf   byte_count, b                        ; 2.4375us
     movf    PORTA, w, a                          ; 2.5000us
     movf    PORTB, w, a                          ; 2.5625us
-    btfss   N64_PIN                              ; 2.6250us  Wait for the data line to go back high.
+    if ctrl1
+        btfss   N64_PIN                          ; 2.6250us  Wait for the data line to go back high.
+    else
+        btfss   N64_PIN2
+    endif
     bra     $-2                                  ; 2.6875us
     endm
 
@@ -473,10 +490,6 @@ bit_loop
     ifdef DBG_TRACE
         movff   INDF1, PORTC
     endif
-        ;; Following controller stop bit, got back waiting for host command right away.
-        ;; Some games may send us another read/write within les than 400 us. Polling
-        ;; the GameCube controller and the adaptor mapping work can take up to 500 us.
-        ;; We would then miss a command from the host and the transfer would fail.
     endif
 
     return                                       ; 2.2500us
