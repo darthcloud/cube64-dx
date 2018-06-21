@@ -41,19 +41,21 @@
 
         #define N64_PIN         PORTB, 4
         #define N64_TRIS        TRISB, 4
-        #define N64_PIN2        PORTB, 5
-        #define N64_TRIS2       TRISB, 5
+        #define N64_PIN2        PORTB, 6
+        #define N64_TRIS2       TRISB, 6
         #define GAMECUBE_PIN    PORTA, 4
         #define GAMECUBE_TRIS   TRISA, 4
         #define N64C_PIN        PORTA, 2
         #define N64C_TRIS       TRISA, 2
+        #define LED_PIN         LATA, 5
 
 io_init macro
         clrf    PORTA, a
         clrf    PORTB, a
         clrf    WPUA, a                          ; Disable pull-ups.
         clrf    WPUB, a
-        setf    TRISA, a
+        movlw   0xDF
+        movwf   TRISA, a
         setf    TRISB, a
         clrf    PORTC, a                         ; Debug port
         clrf    TRISC, a                         ; Debug port
@@ -61,7 +63,7 @@ io_init macro
         clrf    ANSELH, a
         bsf     IOCB, IOCB4, a                   ; Enable interrupt on N64_PIN.
         btfsc   N64_PIN2, a                      ; If 2nd port connected,
-        bsf     IOCB, IOCB5, a                   ; enable interrupt on N64_PIN2.
+        bsf     IOCB, IOCB6, a                   ; enable interrupt on N64_PIN2.
         endm
 
     else
@@ -103,8 +105,11 @@ pll_startup_delay macro
         flags2
         menu_flags
         nv_flags
+        nv_config_js
+        nv_config_cs
         temp
         temp2
+        temp3
         byte_count
         bit_count
         bus_byte_count
@@ -135,7 +140,8 @@ pll_startup_delay macro
         n64_id_buffer:3
         n64_slot_status                          ; Can't store directly in id buffer since transmission modify the buffers.
         gamecube_buffer:6                        ; Last 2 bytes for gc_buffer are within the first 2
-        gamecube_scale:8                         ; bytes of gc_scale as it allows using the same macro for both buffers.
+        gamecube_curve:6                         ; bytes of gc_curve which in turn last 2 bytes for gc_curve are within the first 2
+        gamecube_scale:8                         ; bytes of gc_scale as it allows using the same macro for all buffers.
     endc
 
 
@@ -158,16 +164,23 @@ startup
     io_init
 
     n64gc_init
+    clrf    FSR0H, a
+    call    clear_n64_status_buffer
+    incf    FSR0H, f, a
+    call    clear_n64_status_buffer
     clrf    flags, b
     clrf    flags2, b
     clrf    menu_flags, b
     clrf    nv_flags, b
+    clrf    nv_config_js, b
+    clrf    nv_config_cs, b
     clrf    calibration_count, b
     clrf    FSR0H, a
     clrf    FSR1H, a                             ; We only need to access first bank, so we set it in FSR high byte right away.
     clrf    TBLPTRU, a                           ; Preload table upper byte. Same for all tables.
     movlw   high crc_large_table                 ; Preload table high byte for CRC table initially.
     movwf   TBLPTRH, a
+    bsf     LED_PIN, a
 
     movlw   0x01                                 ; Set controller id to occupied slot.
     movwf   n64_slot_status, b
@@ -191,8 +204,6 @@ startup
     ;; Check our EEPROM for validity, and reset it if it's blank or corrupted.
     call    validate_eeprom
 
-    call    gamecube_init
-
 int_reentry
     movf    PORTA, w, a
     movf    PORTB, w, a
@@ -200,8 +211,10 @@ int_reentry
     bcf     INTCON, RABIF, a
     bsf     INTCON, GIEH, a
     call    gamecube_wait_for_idle
+    call    gamecube_init
 main_loop
     clrwdt
+    call    update_led
     call    update_rumble_feedback               ; Give feedback for remapping operations using the rumble motor.
     call    update_slot_empty_timer              ; Report slot empty for 1 s following adaptor mode change.
     call    gamecube_poll_status                 ; The GameCube poll takes place during the dead period
@@ -209,6 +222,18 @@ main_loop
     btg     FSR2L, 2, a                          ; Set older regs copy as working regs.
     call    gamecube_bus_wait
     goto    main_loop
+
+    ;; n64_status_buffer init.
+clear_n64_status_buffer
+    movlw   n64_status_buffer
+    movwf   FSR0L, a
+    movlw   .8
+    movwf   temp, b
+clear_loop
+    clrf    POSTINC0, a
+    decfsz  temp, f, b
+    bra     clear_loop
+    return
 
 
     ;; *******************************************************************************
@@ -368,6 +393,26 @@ negative_axis_value
 next
     endm
 
+    ;; This function apply a response curve function on the GameCube joysticks.
+apply_js_curve macro table, axis_byte
+    local   set_curve_buffer
+
+    movf    gamecube_buffer + axis_byte, w, b
+    btfss_config_js axis_byte, CURVE_BIT
+    bra     set_curve_buffer
+
+    movlw   high table
+    movwf   TBLPTRH, a
+    movf_config_js axis_byte
+    andlw   LAYOUT_MASK
+    addwf   TBLPTRH, f, a
+    movff   gamecube_buffer + axis_byte, TBLPTRL
+    TBLRD*
+    movf    TABLAT, w, a
+set_curve_buffer
+    movwf   gamecube_curve + axis_byte, b
+    endm
+
     ;; GameCube joysticks range differs from the N64. N64 has a maximum of ~84 along the axes origin
     ;; and ~71 in the diagonals. GameCube main joystick has a maximum (once dead zone & sign applied)
     ;; of ~90 and ~65 for the same. C joystick maximums are a bit lower at ~82 and ~57. N64 max value
@@ -379,8 +424,9 @@ next
     ;; value in the fixed point 9.7 format.
 apply_js_scale macro table, axis_byte, ref_byte
     local   set_scale_buffer
-    movf    gamecube_buffer + axis_byte, w, b
-    btfsc   NV_FLAG_SCALING_OFF                  ; Bypass scaling if flag set.
+
+    movf    gamecube_curve + axis_byte, w, b
+    btfsc_config_js axis_byte, SCALE_BIT
     bra     set_scale_buffer
 
     movlw   high table
@@ -388,9 +434,9 @@ apply_js_scale macro table, axis_byte, ref_byte
     movff   gamecube_buffer + ref_byte, TBLPTRL
     TBLRD*
     movf    TABLAT, w, a
-    mulwf   gamecube_buffer + axis_byte, b
+    mulwf   gamecube_curve + axis_byte, b
 
-    btfsc   gamecube_buffer + axis_byte, 7, b
+    btfsc   gamecube_curve + axis_byte, 7, b
     subwf   PRODH, f, a                          ; If negative stick value, fixup high byte.
 
     rlcf    PRODL, w, a
@@ -504,6 +550,11 @@ n64_translate_status
     bcf    STATUS, C, a
     rrcf   gamecube_buffer + GC_R_ANALOG, w, b
     movwf  gamecube_scale + GC_R_ANALOG, b
+
+    apply_js_curve      gamecube_js_curves, GC_JOYSTICK_X
+    apply_js_curve      gamecube_js_curves, GC_JOYSTICK_Y
+    apply_js_curve      gamecube_cs_curves, GC_CSTICK_X
+    apply_js_curve      gamecube_cs_curves, GC_CSTICK_Y
 
     apply_js_scale      gamecube_js_scale, GC_JOYSTICK_X, GC_JOYSTICK_Y
     apply_js_scale      gamecube_js_scale, GC_JOYSTICK_Y, GC_JOYSTICK_X
@@ -673,6 +724,8 @@ remap_virtual_button
     goto    accept_mode_select
     btfsc   FLAG_LAYOUT_SUBMENU
     goto    accept_layout_select
+    btfsc   FLAG_JOYSTICK
+    goto    accept_joystick_config
 
     ;; Pass anything else on to the N64, mapped through the EEPROM first
     eeprom_btn_addr temp_key_map, 0
@@ -717,6 +770,7 @@ check_remap_combo
     ;; and await button presses from the user indicating which menu option they want
     ;; access to. Selection is handled into remap_virtual_button since we need virtual
     ;; button codes.
+    bcf     LED_PIN, a
     movf    menu_flags, w, b
     iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
     iorlw   BIT_TOP_CONFIG_MENU                  ; bsf     FLAG_TOP_CONFIG_MENU
@@ -741,7 +795,7 @@ accept_config_menu_select
     btfsc   gamecube_buffer + GC_Y, b
     bra     menu_special_source_wait
 
-    andlw   ~BIT_TRIGGER                         ; bcf     FLAG_TRIGGER, Flag not used in following commands.
+    bcf     FLAG_TRIGGER                         ; Flag not used in following commands.
 
     ;; The analog trigger mapping combo was pressed.
     ;; This modify both remap and special combo to allow mapping to analog trigger.
@@ -761,6 +815,10 @@ accept_config_menu_select
     btfsc   gamecube_buffer + GC_D_LEFT, b
     bra     menu_layout_submenu
 
+    ;; Joysticks config menu.
+    btfsc   gamecube_buffer + GC_D_RIGHT, b
+    bra     menu_joystick_source_wait
+
     movwf   menu_flags, b                        ; Set flags as atomic operations. Avoid disabling interrupt.
     return
 
@@ -777,7 +835,7 @@ menu_special_source_wait
     goto    start_rumble_feedback
 
 menu_trigger_flag_set
-    iorlw   BIT_TRIGGER                          ; bsf     FLAG_TRIGGER
+    bsf     FLAG_TRIGGER
     iorlw   BIT_TOP_CONFIG_MENU                  ; bsf     FLAG_TOP_CONFIG_MENU
     movwf   temp, b
     goto    start_rumble_feedback
@@ -797,6 +855,12 @@ menu_layout_submenu
     movwf   temp, b
     goto    start_rumble_feedback
 
+menu_joystick_source_wait
+    iorlw   BIT_JOYSTICK
+    iorlw   BIT_SOURCE_WAIT
+    movwf   temp, b
+    goto    start_rumble_feedback
+
     ;; Accept the virtual button code for the remap source in 'w', and prepare
     ;; to accept the remap destination.
 accept_source
@@ -804,8 +868,38 @@ accept_source
     movf    menu_flags, w, b
     iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
     andlw   ~BIT_SOURCE_WAIT                     ; bcf     FLAG_SOURCE_WAIT
-    movwf   menu_flags, b                        ; Set flags as atomic operations. Avoid disabling interrupt.
+    movwf   temp, b
+
+    bcf     FLAG_CS
+    bcf     FLAG_AXIS_Y
+
+    btfss   FLAG_JOYSTICK
+    goto    start_rumble_feedback
+
+    movf    remap_source_button, w, b
+    andlw   ~LAYOUT_MASK
+    xorlw   BTN_LJ_UP
+    bz      check_axis
+
+    movf    remap_source_button, w, b
+    andlw   ~LAYOUT_MASK
+    xorlw   BTN_RJ_UP
+    bz      check_axis-2
+
+    movf    temp, w, b
+    andlw   ~BIT_JOYSTICK
+    movwf   temp, b
+    movff   temp, menu_flags
     return
+
+    bsf     FLAG_CS
+check_axis
+    decf    remap_source_button, f, b
+    btfsc   remap_source_button, 1, b            ; Check if X or Y axis.
+    bsf     FLAG_AXIS_Y
+    incf    remap_source_button, f, b
+
+    goto    start_rumble_feedback
 
     ;; Accept the virtual button code for the remap destination in 'w', and write
     ;; the button mapping to EEPROM.
@@ -832,7 +926,7 @@ accept_special_dest
     andlw   ~LAYOUT_MASK                         ; Check for any D-pad direction.
     bz      common_accept_dest - 2
     movf    temp, w, b
-    andlw   ~BIT_TRIGGER                         ; bcf     FLAG_TRIGGER
+    bcf     FLAG_TRIGGER
     movwf   menu_flags, b                        ; Set flags as atomic operations. Avoid disabling interrupt.
     return
 
@@ -858,9 +952,7 @@ save_mapping
     movf    PRODL, w, a
     addwf   EEADR, f, a
     call    eewrite
-    movf    temp, w, b
-    andlw   ~BIT_TRIGGER                         ; bcf     FLAG_TRIGGER
-    movwf   temp, b
+    bcf     FLAG_TRIGGER
     goto    start_rumble_feedback
 
     ;; Accept the adapter mode selection.
@@ -897,33 +989,115 @@ accept_layout_select
 
     movf    remap_source_button, w, b
     andlw   ~LAYOUT_MASK                         ; Check for any D-pad direction.
-    bnz     check_js_toggle
+    bnz     cancel_layout_select
 
     movlw   ~LAYOUT_MASK
     andwf   nv_flags, f, b
     movf    remap_source_button, w, b
     iorwf   nv_flags, f, b
-    bra     write_nv_flags
 
-check_js_toggle
-    movf    remap_source_button, w, b
-    andlw   ~0x01
-    xorlw   BTN_X
-    bz      accept_js_select
-    movff   temp, menu_flags                     ; Set flags as atomic operations. Avoid disabling interrupt.
-    return
-
-accept_js_select
-    bcf     NV_FLAG_SCALING_OFF
-    btfsc   remap_source_button, 0, b            ; BTN_Y disable scaling, BTN_X enable it.
-    bsf     NV_FLAG_SCALING_OFF
-write_nv_flags
-    movf    nv_flags, w, b
-    movwf   EEDATA, a
+    movff   nv_flags, EEDATA
     movlw   EEPROM_NV_FLAGS
     movwf   EEADR, a
     call    eewrite
+
+    movf    nv_flags, w, b
+    andlw   LAYOUT_MASK
+    movwf   temp_key_map, b
+
+    movlw   CONFIG_JS
+    eeprom_btn_addr temp_key_map, 0
+    call    eeread
+    movwf   nv_config_js, b
+
+    movlw   CONFIG_CS
+    eeprom_btn_addr temp_key_map, 0
+    call    eeread
+    movwf   nv_config_cs, b
     goto    start_rumble_feedback
+
+cancel_layout_select
+    movff   temp, menu_flags                     ; Set flags as atomic operations. Avoid disabling interrupt.
+    return
+
+accept_joystick_config
+    movwf   remap_dest_button, b
+
+    movf    menu_flags, w, b
+    iorlw   BIT_WAITING_FOR_RELEASE
+    andlw   ~BIT_JOYSTICK
+    movwf   temp, b
+
+    movlw   nv_config_js
+    movwf   FSR0L, a
+    movlw   nv_config_cs
+    btfsc   FLAG_CS
+    movwf   FSR0L, a
+
+    btfsc   gamecube_buffer + GC_A, b
+    bra     js_config_clr_curve
+
+    btfsc   gamecube_buffer + GC_X, b
+    bra     js_config_clr_not_scale
+
+    btfsc   gamecube_buffer + GC_Y, b
+    bra     js_config_set_not_scale
+
+    movf    remap_dest_button, w, b
+    andlw   ~LAYOUT_MASK
+    bz      js_config_set_curve
+
+    movff   temp, menu_flags
+    return
+
+js_config_clr_curve
+    movlw   ~CURVE_MASK
+    btfsc   FLAG_AXIS_Y
+    movlw   ~CURVE_MASK_Y
+    andwf   INDF0, f, a
+    bra     js_config_save
+
+js_config_set_curve
+    movlw   ~CURVE_MASK
+    btfsc   FLAG_AXIS_Y
+    movlw   ~CURVE_MASK_Y
+    andwf   INDF0, f, a
+
+    movf    remap_dest_button, w, b
+    btfsc   FLAG_AXIS_Y
+    swapf   remap_dest_button, w, b
+    iorwf   INDF0, f, a
+
+    btfss   FLAG_AXIS_Y
+    bsf     INDF0, CURVE_BIT, a
+    btfsc   FLAG_AXIS_Y
+    bsf     INDF0, CURVE_BIT_Y, a
+    bra     js_config_save
+
+js_config_clr_not_scale
+    btfss   FLAG_AXIS_Y
+    bcf     INDF0, SCALE_BIT, a
+    btfsc   FLAG_AXIS_Y
+    bcf     INDF0, SCALE_BIT_Y, a
+    bra     js_config_save
+
+js_config_set_not_scale
+    btfss   FLAG_AXIS_Y
+    bsf     INDF0, SCALE_BIT, a
+    btfsc   FLAG_AXIS_Y
+    bsf     INDF0, SCALE_BIT_Y, a
+    bra     js_config_save
+
+js_config_save
+    movlw   CONFIG_JS
+    btfsc   FLAG_CS
+    movlw   CONFIG_CS
+    eeprom_btn_addr temp_key_map, 0
+    movwf   EEADR, a
+    movff   INDF0, EEDATA
+    call    eewrite
+    goto    start_rumble_feedback
+
 
     ;; Check our EEPROM for the magic word identifying it as button mapping data for
     ;; this version of our firmware. If we don't find the magic word, reset its contents.
@@ -943,10 +1117,23 @@ validate_eeprom
     call    eeread
     movwf   nv_flags, b
 
+    andlw   LAYOUT_MASK
+    movwf   temp_key_map, b
+
     btfsc   nv_flags, 3, b
     bsf     n64_slot_status, 0, b
     btfsc   nv_flags, 4, b
     bsf     n64_slot_status, 1, b
+
+    movlw   CONFIG_JS
+    eeprom_btn_addr temp_key_map, 0
+    call    eeread
+    movwf   nv_config_js, b
+
+    movlw   CONFIG_CS
+    eeprom_btn_addr temp_key_map, 0
+    call    eeread
+    movwf   nv_config_cs, b
     return
 
     ;; Write an identity mapping and a valid magic word to the EEPROM.
@@ -986,6 +1173,8 @@ next_eeprom_bank
     ;; Reset only data relative to the current active button mapping layout.
 reset_active_eeprom_layout
     bcf     INTCON, GIEH, a
+    clrf    nv_config_js, b
+    clrf    nv_config_cs, b
     movlw   high eeprom_default                  ; Load address for EEPROM layout default.
     movwf   TBLPTRH, a
     clrf    TBLPTRL, a
@@ -1116,6 +1305,12 @@ update_slot_empty_timer
     movlw   EEPROM_NV_FLAGS
     movwf   EEADR, a
     call    eewrite
+    return
+
+update_led
+    movf    menu_flags, w, b
+    btfsc   STATUS, Z, a
+    bsf     LED_PIN, a
     return
 
 
@@ -1519,6 +1714,9 @@ gamecube_init_wavebird
 
     ;; GameCube controller init routine.
 gamecube_init
+    clrwdt
+    btfsc   FLAG_CALIBRATED
+    return
     call    gamecube_get_id
     btfsc   FLAG_CTRL_READY
     bra     gamecube_ready
@@ -1540,6 +1738,7 @@ gamecube_ready
     bsf     NV_FLAG_BYPASS_MODE
 
     call    gamecube_bus_wait
+    bsf     FLAG_CALIBRATED
     return
 
     ;; Poll the GameCube controller's state by transmitting a magical
@@ -1581,13 +1780,9 @@ gamecube_rx
 
     ;; This contain the default configuration used if the EEPROM is empty, corrupt or
     ;; user perform reset.
-    org     0x3C00
+    org     0x3400
 eeprom_default
     #include eeprom_default.inc
-
-    ;; This contains the scaling tables used to scale our GC joysticks values.
-    org     0x3D00
-    #include js_scale.inc
 
     ;; 256-byte table extracted from the test vectors, that can be used to
     ;; compute any CRC. This table is the inverted CRC generated for every
@@ -1595,8 +1790,16 @@ eeprom_default
     ;;
     ;; It was generated using the reversed large-table
     ;; implementation of the CRC, in notes/gen_asm_large_table_crc.py
-    org     0x3F00
+    org     0x3500
 crc_large_table
     #include large_table_crc.inc
+
+    ;; This contains the scaling tables used to scale our GC joysticks values.
+    org     0x3600
+    #include js_scale.inc
+
+    ;; This contains the response curve tables for GC joysticks values.
+    org     0x3800
+    #include js_curve.inc
 
     end

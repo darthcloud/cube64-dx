@@ -399,7 +399,8 @@ not_last_bit                                     ; 1.6250us
     ;; We get late into the first bit around 0.4 us. Use the spare cycle to init
     ;; pretty much everything.
 n64_rx_command_start macro ctrl1
-    wait    .5                                   ; 0.6875us  We get into the interrupt at around 0.4 us.
+    wait    .4                                   ; 0.6875us  We get into the interrupt at around 0.4 us.
+    btg     FSR2L, 2, a                          ; 0.9375us  Use last good regs copy.
     clrf    FSR2H, a                             ; 1.0000us  Point to buffers on bank 0.
     bsf     GAMECUBE_TRIS                        ; 1.0625us
     if ctrl1
@@ -409,11 +410,14 @@ n64_rx_command_start macro ctrl1
         bsf     FLAG_CTRL2                       ; 1.1250us  2nd controller poll.
         incf    FSR2H, f, a                      ; 1.1875us  Point to buffers on bank 1.
     endif
-    wait    .4                                   ; 1.2500us
+    btfss   LED_PIN, a                           ; 1.2500us  Clear joystick buffer if in the menu.
+    clrf    n64_status_buffer + 2, a             ; 1.3125us
+    btfss   LED_PIN, a                           ; 1.3750us
+    clrf    n64_status_buffer + 3, a             ; 1.4375us
     clrf    FSR1H, a                             ; 1.5000us
     movlw   n64_command                          ; 1.5625us
     movwf   FSR1L, a                             ; 1.6250us
-    btg     FSR2L, 2, a                          ; 1.6875us  Use last good regs copy.
+    wait    .1                                   ; 1.6875us
     movlw   high crc_large_table                 ; 1.7500us  Load CRC table high address byte
     movwf   TBLPTRH, a                           ; 1.8125us  with spare time.
     rlcf    INDF1, f, a                          ; 1.8750us  Make room for the new bit.

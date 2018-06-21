@@ -83,6 +83,8 @@ buttons_default = [
     buttons.BTN_NONE,    #BTN_HOME
     buttons.BTN_START,   #BTN_START
     buttons.BTN_NONE,    #BTN_C
+    0x00,                #JS_CURVE
+    0x00,                #CS_CURVE
 ]
 
 if __name__ == "__main__":
@@ -101,8 +103,7 @@ if __name__ == "__main__":
 
     for address, default in enumerate(buttons_default):
         FILE.write(b"0x%02X" % default)
-        FILE.write(b", 0x%02X" % 0x00)
-        if address < buttons.BTN_NONE-1:
+        if address < buttons.BTN_NONE+1:
             FILE.write(b", ")
 
     FILE.write(b"\n\n")

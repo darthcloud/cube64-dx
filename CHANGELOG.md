@@ -1,8 +1,18 @@
 # Changelog
 
-## [3.3] - 2018-06-01
+## [3.4] - 2018-06-21
+### Added
+ - Joystick response curve per axis and layout.
+ - Menu LED indicator.
+
+### Changed
+ - Answer N64 poll within WaveBird init.
+ - Mute joysticks input while in menu.
+
+## [3.3] - 2018-06-05
 ### Added
  - Interrupt based reply.
+ - Support 1 player 2 controllers control style.
 
 ## [3.2] - 2018-06-01
 ### Changed
