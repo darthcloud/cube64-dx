@@ -47,13 +47,15 @@
         #define GAMECUBE_TRIS   TRISA, 4
         #define N64C_PIN        PORTA, 2
         #define N64C_TRIS       TRISA, 2
+        #define LED_PIN         LATA, 5
 
 io_init macro
         clrf    PORTA, a
         clrf    PORTB, a
         clrf    WPUA, a                          ; Disable pull-ups.
         clrf    WPUB, a
-        setf    TRISA, a
+        movlw   0xDF
+        movwf   TRISA, a
         setf    TRISB, a
         clrf    PORTC, a                         ; Debug port
         clrf    TRISC, a                         ; Debug port
@@ -202,6 +204,7 @@ int_reentry
     call    gamecube_wait_for_idle
 main_loop
     clrwdt
+    call    update_led
     call    update_rumble_feedback               ; Give feedback for remapping operations using the rumble motor.
     call    update_slot_empty_timer              ; Report slot empty for 1 s following adaptor mode change.
     call    gamecube_poll_status                 ; The GameCube poll takes place during the dead period
@@ -717,6 +720,7 @@ check_remap_combo
     ;; and await button presses from the user indicating which menu option they want
     ;; access to. Selection is handled into remap_virtual_button since we need virtual
     ;; button codes.
+    bcf     LED_PIN, a
     movf    menu_flags, w, b
     iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
     iorlw   BIT_TOP_CONFIG_MENU                  ; bsf     FLAG_TOP_CONFIG_MENU
@@ -1099,6 +1103,12 @@ update_slot_empty_timer
     iorlw   BIT_BYPASS_MODE                      ; bsf     FLAG_BYPASS_MODE
     movff   target_slot_status, n64_slot_status
     movwf   flags, b                             ; Set flags as atomic operations. Avoid disabling interrupt.
+    return
+
+update_led
+    movf    menu_flags, w, b
+    btfsc   STATUS, Z, a
+    bsf     LED_PIN, a
     return
 
 
