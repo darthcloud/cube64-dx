@@ -164,6 +164,10 @@ startup
     io_init
 
     n64gc_init
+    clrf    FSR0H, a
+    call    clear_n64_status_buffer
+    incf    FSR0H, f, a
+    call    clear_n64_status_buffer
     clrf    flags, b
     clrf    flags2, b
     clrf    menu_flags, b
@@ -176,6 +180,7 @@ startup
     clrf    TBLPTRU, a                           ; Preload table upper byte. Same for all tables.
     movlw   high crc_large_table                 ; Preload table high byte for CRC table initially.
     movwf   TBLPTRH, a
+    bsf     LED_PIN, a
 
     movlw   0x01                                 ; Set controller id to occupied slot.
     movwf   n64_slot_status, b
@@ -199,8 +204,6 @@ startup
     ;; Check our EEPROM for validity, and reset it if it's blank or corrupted.
     call    validate_eeprom
 
-    call    gamecube_init
-
 int_reentry
     movf    PORTA, w, a
     movf    PORTB, w, a
@@ -208,6 +211,7 @@ int_reentry
     bcf     INTCON, RABIF, a
     bsf     INTCON, GIEH, a
     call    gamecube_wait_for_idle
+    call    gamecube_init
 main_loop
     clrwdt
     call    update_led
@@ -218,6 +222,18 @@ main_loop
     btg     FSR2L, 2, a                          ; Set older regs copy as working regs.
     call    gamecube_bus_wait
     goto    main_loop
+
+    ;; n64_status_buffer init.
+clear_n64_status_buffer
+    movlw   n64_status_buffer
+    movwf   FSR0L, a
+    movlw   .8
+    movwf   temp, b
+clear_loop
+    clrf    POSTINC0, a
+    decfsz  temp, f, b
+    bra     clear_loop
+    return
 
 
     ;; *******************************************************************************
@@ -1680,6 +1696,9 @@ gamecube_init_wavebird
 
     ;; GameCube controller init routine.
 gamecube_init
+    clrwdt
+    btfsc   FLAG_CALIBRATED
+    return
     call    gamecube_get_id
     btfsc   FLAG_CTRL_READY
     bra     gamecube_ready
@@ -1701,6 +1720,7 @@ gamecube_ready
     bsf     FLAG_BYPASS_MODE
 
     call    gamecube_bus_wait
+    bsf     FLAG_CALIBRATED
     return
 
     ;; Poll the GameCube controller's state by transmitting a magical

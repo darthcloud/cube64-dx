@@ -56,6 +56,9 @@
     #define FLAG_CS                     flags2, 4, b
     #define FLAG_AXIS_Y                 flags2, 5, b
 
+    ;; Joystick calibrated.
+    #define FLAG_CALIBRATED             flags2, 6, b
+
     ;; Set when we are waiting for item selection in the top config menu.
     #define BIT_TOP_CONFIG_MENU         0x01
     #define FLAG_TOP_CONFIG_MENU        menu_flags, 0, b
