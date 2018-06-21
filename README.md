@@ -185,7 +185,7 @@ To toggle on/off the scaling function on a global basis (affect all mapping):
 This option is saved into the EEPROM so the next time you power up the adaptor the last 
 used setting will be reloaded automatically.
 
-#### Calibration
+### Calibration
 
 The adaptor handles calibration in almost the exact same way a GameCube does. If
 your joystick is drifting or unresponsive during gameplay, you should be able to
@@ -200,6 +200,16 @@ joystick, C-stick, L button, or R button:
 
   4. Turn off the N64 then turn it back on. (The reset button won't
      recalibrate, since the adaptor doesn't lose power or get reinitialized)
+
+### 1 player 2 controllers control style
+
+If connected to two ports of the system at boot time, the adaptor will answer automatically
+a limited button status and identity commands on the 2nd port. This allows
+to play GoldenEye 007 and Perfect Dark using their respective 1 player 2 controller
+control style.
+
+Analog input map for the 1st controller C Buttons will map to the 2nd controller joystick.
+Digital input map for the 1st controller R button will map to the 2nd controller Z button.
 
 ## Hardware
 

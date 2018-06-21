@@ -1,8 +1,9 @@
 # Changelog
 
-## [3.3] - 2018-06-01
+## [3.3] - 2018-06-05
 ### Added
  - Interrupt based reply.
+ - Support 1 player 2 controllers control style.
 
 ## [3.2] - 2018-06-01
 ### Changed
