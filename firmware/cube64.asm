@@ -41,8 +41,8 @@
 
         #define N64_PIN         PORTB, 4
         #define N64_TRIS        TRISB, 4
-        #define N64_PIN2        PORTB, 5
-        #define N64_TRIS2       TRISB, 5
+        #define N64_PIN2        PORTB, 6
+        #define N64_TRIS2       TRISB, 6
         #define GAMECUBE_PIN    PORTA, 4
         #define GAMECUBE_TRIS   TRISA, 4
         #define N64C_PIN        PORTA, 2
@@ -61,7 +61,7 @@ io_init macro
         clrf    ANSELH, a
         bsf     IOCB, IOCB4, a                   ; Enable interrupt on N64_PIN.
         btfsc   N64_PIN2, a                      ; If 2nd port connected,
-        bsf     IOCB, IOCB5, a                   ; enable interrupt on N64_PIN2.
+        bsf     IOCB, IOCB6, a                   ; enable interrupt on N64_PIN2.
         endm
 
     else
