@@ -54,6 +54,8 @@ To access the menu:
    1. Hold down the analog L and R buttons down most of the way, but not enough to
       push the end-stop buttons, and press Start.
 
+The adaptor LED will be ON as long you are inside the menu.
+
 Once in the menu the N64 will receive blank status packet regardless of buttons
 pressed on the GameCube controller. An invalid selection in the menu will exit
 the menu.
@@ -87,10 +89,12 @@ It's possible to map a special function to a button instead of a N64 button.
 
   3. Press the button you wish to set the function to.
 
-  4. Press the button corresponding to the special function you want. This button is always
+  4. If you have the rumble power connected, you should feel a brief rumble.
+
+  5. Press the button corresponding to the special function you want. This button is always
      interpreted according to the defaults below.
 
-  5. If the mapping was successful and you have rumble power connected, you should feel
+  6. If the mapping was successful and you have rumble power connected, you should feel
      a brief rumble.
 
 ##### Function available:
@@ -167,19 +171,27 @@ described above.
 When you select a layout, it is saved into the EEPROM so the next time you power up
 the adaptor the last used will be reloaded automatically.
 
-#### GameCube joysticks scaling
+#### GameCube joysticks config
 
 By default the joysticks value from the GameCube controller are scale to match the N64
 joystick value range. This can be disabled to use the GameCube range instead (< v3.1 behavior).
-To toggle on/off the scaling function on a global basis (affect all mapping):
+A response curve can also be applied to a GC axis. By default none is applied (Linear).
+Scale and curve setting are save independently for each axis and each layout.
 
-  1. While in the main menu, press D-pad LEFT.
+  1. While in the main menu, press D-pad RIGHT.
 
   2. If you have the rumble power connected, you should feel a brief rumble.
 
-  3. Press X to enable or Y to disable the scaling function.
+  3. Press either direction on one of the four GC joystick axes.
 
-  4. If you have the rumble power connected and the layout change was successful, you should
+  4. If you have the rumble power connected, you should feel a brief rumble.
+
+  5. Press X to enable or Y to disable the scaling function.
+     Or press one of the D-pad directions for enabling a response curve.
+     (UP: Aggressive, LEFT: Relaxed, RIGHT: Wide, DOWN: S-Curve)
+     Or press A for no response curve (Linear).
+
+  6. If you have the rumble power connected and the layout change was successful, you should
      feel a brief rumble.
 
 This option is saved into the EEPROM so the next time you power up the adaptor the last 
