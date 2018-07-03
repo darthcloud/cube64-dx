@@ -9,12 +9,10 @@ import serial, struct
 
 class SerialBridge:
     """Thin abstraction for using the serial_bridge device to calculate
-       CRCs for packets using real Nintendo hardware. This assumes
-       the serial port has already been set up for the right baud rate
-       and such (38400 8-N-1)
+       CRCs for packets using real Nintendo hardware.
        """
     def __init__(self, dev="/dev/ttyUSB0"):
-        self.fd = serial.Serial(port=dev, baudrate=38400, timeout=1)
+        self.fd = serial.Serial(port=dev, baudrate=115200, timeout=1)
 
     def write(self, data, replyBytes=0):
         """Write the start-of-command identifier, the tramsmit length,

@@ -35,131 +35,171 @@
     ;;   1-n    Received data
     ;;
 
-    list    p=16f84a
-    errorlevel -302
-    #include p16f84a.inc
+    ;; Definitions for the PIC18F14K22 version
+    ifdef  __18F14K22
+        #include p18f14k22.inc
+
+        CONFIG FOSC = IRC, PLLEN = ON, PCLKEN = OFF, FCMEN = OFF, IESO = OFF
+        CONFIG PWRTEN = OFF, BOREN = OFF
+        CONFIG WDTEN = ON, WDTPS = 4
+        CONFIG HFOFST = ON, MCLRE = OFF
+        CONFIG STVREN = OFF, LVP = OFF, BBSIZ = OFF, XINST = ON, DEBUG = OFF
+        CONFIG CP0 = OFF, CP1 = OFF
+        CONFIG CPB = OFF, CPD = OFF
+        CONFIG WRT0 = OFF, WRT1 = OFF
+        CONFIG WRTC = OFF, WRTB = OFF, WRTD = OFF
+        CONFIG EBTR0 = OFF, EBTR1 = OFF
+        CONFIG EBTRB = OFF
+
+io_init macro
+        clrf    PORTA, a
+        clrf    PORTB, a
+        clrf    PORTC, a
+        clrf    WPUA, a                          ; Disable pull-ups.
+        clrf    WPUB, a
+        movlw   0x20
+        movwf   TRISA, a
+        movwf   TRISB, a
+        clrf    TRISC, a
+        clrf    ANSEL, a                         ; Set IOs to digital.
+        clrf    ANSELH, a
+        movlw   0x21                             ; Set baudrate to 115200.
+        movwf   SPBRG, a
+        bsf     TXSTA, BRGH, a
+        bsf     RCSTA, SPEN, a
+        bsf     TXSTA, TXEN, a
+        bsf     RCSTA, CREN, a
+        endm
+
+    else
+        messg    "Unsupported processor"
+    endif
+
+    ;; Delay of about ~2 ms that allow the PLL to shift the frequency to 64 MHz.
+pll_startup_delay macro
+    bcf     INTCON, TMR0IF, a                    ; Clear overflow bit.
+    movlw   0x44                                 ; Set 8-bit mode and 1:32 prescaler.
+    movwf   T0CON, a
+    clrf    TMR0L, a                             ; Clear timer0.
+    bsf     T0CON, TMR0ON, a                     ; Enable timer0 and
+    btfss   INTCON, TMR0IF, a                    ; wait for timer0 overflow.
+    goto    $-2
+    bcf     INTCON, TMR0IF, a                    ; Clear overflow bit and
+    bcf     T0CON, TMR0ON, a                     ; disable timer0.
+    endm
 
     #include n64gc_comm.inc
-    #include rs232_comm.inc
-
-    __CONFIG   _CP_OFF & _PWRTE_OFF & _WDT_ON & _HS_OSC
 
     ;; Hardware declarations
-    #define NINTENDO_PIN    PORTA, 0
-    #define NINTENDO_TRIS   TRISA, 0
-    #define RX232_PIN   PORTB, 0
-    #define TX232_PIN   PORTB, 1
+    #define NINTENDO_PIN    PORTA, 5
+    #define NINTENDO_TRIS   TRISA, 5
+    #define RX232_PIN   PORTB, 5
+    #define TX232_PIN   PORTB, 7
 
     ;; Reset and interrupt vectors
-    org 0
+    org 0x00
     goto    startup
-    org 4
+    org 0x08
+    retfie
+    org 0x18
     retfie
 
     ;; Variables
-    cblock  0x0C
+    cblock  0x00
         temp
         bit_count
         byte_count
-        serial_byte
         cmd_tx_count
         cmd_rx_count
         buffer:.40
+        crc_work
+        n64_crc
     endc
 
 startup
-    ;; Initialize I/O ports- all unused pins output low, nintendo pin and serial receive
-    ;; are initially tristated.
-    bcf STATUS, RP0
-    clrf    PORTA
-    clrf    PORTB
-    bsf STATUS, RP0
-    movlw   0x11
-    movwf   TRISA
-    movlw   0x01
-    movwf   TRISB
-
+    movlb   0x00                                 ; Set bank 0 active.
+    bcf     INTCON, GIE                          ; Disable interrupts.
+    movlw   0x70                                 ; Set internal clock to 16 MHz.
+    movwf   OSCCON, a
+    pll_startup_delay                            ; Wait for PLL to shift frequency to 64 MHz.
+    io_init
     n64gc_init
+    clrf    FSR1H, a
 
 main_loop
     call    serial_rx
     xorlw   0x7E
-    btfss   STATUS, Z
-    goto    main_loop   ; Wait for the beginning of command marker, 0x7E
+    btfss   STATUS, Z, a
+    goto    main_loop                            ; Wait for the beginning of command marker, 0x7E
 
-    call    serial_rx   ; Save the transmit and receive counts
-    movwf   cmd_tx_count
+    call    serial_rx                            ; Save the transmit and receive counts
+    movwf   cmd_tx_count, b
     call    serial_rx
-    movwf   cmd_rx_count
+    movwf   cmd_rx_count, b
 
-    movf    cmd_tx_count, w ; Do we have any data to transmit?
-    btfsc   STATUS, Z
+    movf    cmd_tx_count, w, b                   ; Do we have any data to transmit?
+    btfsc   STATUS, Z, a
     goto    nothing_to_transmit
 
-    movlw   buffer      ; Read in the data to transmit
-    movwf   FSR
-    movf    cmd_tx_count, w
-    movwf   byte_count
+    movlw   buffer                               ; Read in the data to transmit
+    movwf   FSR1L, a
+    movf    cmd_tx_count, w, b
+    movwf   byte_count, b
 tx_read_loop
     call    serial_rx
-    movwf   INDF
-    incf    FSR, f
-    decfsz  byte_count, f
+    movwf   INDF1, a
+    incf    FSR1L, f, a
+    decfsz  byte_count, f, b
     goto    tx_read_loop
 
-    bsf STATUS, RP0 ; Reset the counter
-    movlw   0xEF
-    movwf   OPTION_REG
-    bcf STATUS, RP0
-    clrf    TMR0
-
-    movlw   buffer      ; Transmit to the Nintendo bus...
-    movwf   FSR
-    movf    cmd_tx_count, w
+    movlw   buffer                               ; Transmit to the Nintendo bus...
+    movwf   FSR1L, a
+    movf    cmd_tx_count, w, b
     call    nintendo_tx
 nothing_to_transmit
 
-    movlw   buffer      ; ..then immediately receive
-    movwf   FSR
-    movf    cmd_rx_count, w
-    btfsc   STATUS, Z   ; but not if we have nothing to receive
+    movlw   buffer                               ; ..then immediately receive
+    movwf   FSR1L, a
+    movf    cmd_rx_count, w, b
+    btfsc   STATUS, Z                            ; but not if we have nothing to receive
     goto    main_loop
     call    nintendo_rx
 
-    bcf STATUS, RP0
-    movf    TMR0, w     ; Transmit the transition detection byte
     call    serial_tx
 
-    movlw   buffer      ; Send the data we received
-    movwf   FSR
-    movf    cmd_rx_count, w
-    movwf   byte_count
+    movlw   buffer                               ; Send the data we received
+    movwf   FSR1L, a
+    movf    cmd_rx_count, w, b
+    movwf   byte_count, b
 rx_read_loop
-    movf    INDF, w
+    movf    INDF1, w, a
     call    serial_tx
-    incf    FSR, f
-    decfsz  byte_count, f
+    incf    FSR1L, f, a
+    decfsz  byte_count, f, b
     goto    rx_read_loop
 
     goto    main_loop
 
 
 serial_rx
-    rs232_rx_byte   RX232_PIN, B38400, POLARITY_NORMAL, serial_byte
-    movf    serial_byte, w
+    clrwdt
+    btfss   PIR1, RCIF, a
+    bra     serial_rx
+    movf    RCREG, w, a
     return
 
 serial_tx
-    movwf   serial_byte
-    rs232_tx_byte   TX232_PIN, B38400, POLARITY_NORMAL, serial_byte
+    movwf   TXREG, a
+    btfss   TXSTA, TRMT, a
+    bra     $-2
     return
 
 nintendo_tx
-    bcf NINTENDO_PIN
+    bcf NINTENDO_PIN, a
     n64gc_tx_buffer NINTENDO_TRIS, 0
 
 nintendo_rx
-    movwf   byte_count
+    movwf   byte_count, b
     n64gc_rx_buffer NINTENDO_PIN, byte_count, 0
 
     end
