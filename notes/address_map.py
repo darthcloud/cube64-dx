@@ -15,7 +15,7 @@ addrs = map(int, open("valid.addresses").readlines())
 f = open(sys.argv[1], "w")
 
 for addr in addrs:
-    count = b.busWrite(bytes([0])*32, addr)[0]
+    count = int.from_bytes(b.busWrite(bytes([0])*32, addr)[0], byteorder='big')
     if count:
         f.write("%d\n" % addr)
         print("{}  ******".format(addr))

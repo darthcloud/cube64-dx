@@ -8,15 +8,16 @@
     ;;   the Free Software Foundation; either version 2 of the License, or
     ;;   (at your option) any later version.
     ;;
-    ;; This firmware is designed to run on a PIC16F84A microcontroller
-    ;; clocked at 20 MHz. The Nintendo device's bidirectional data line
-    ;; is on RA0, serial receive is on RB0, serial transmit is on RB1.
+    ;; This firmware is designed to run on a PIC18F14K22 microcontroller
+    ;; clocked at 64 MHz. The Nintendo device's bidirectional data line
+    ;; is on RC0, serial receive is on RB5, serial transmit is on RB7.
     ;;
     ;; RA4 is set up for transition detection, useful in figuring out the
-    ;; address mapping.
+    ;; address mapping. A 47K pull down resistor is required to stabilize
+    ;; the input.
     ;;
     ;; This accepts commands of the following form over the serial port,
-    ;; which is configured for 38400 baud, 8-N-1:
+    ;; which is configured for 115200 baud, 8-N-1:
     ;;
     ;; Host to device:
     ;;
@@ -31,7 +32,7 @@
     ;;
     ;;   Byte   Function
     ;; ----------------------
-    ;;   0      Number of transitions detected on RA4
+    ;;   0      0x01 if transitions detected on RA4, 0x00 otherwise.
     ;;   1-n    Received data
     ;;
 
@@ -57,10 +58,12 @@ io_init macro
         clrf    PORTC, a
         clrf    WPUA, a                          ; Disable pull-ups.
         clrf    WPUB, a
-        movlw   0x20
+        movlw   0x10
         movwf   TRISA, a
+        movlw   0x20
         movwf   TRISB, a
-        clrf    TRISC, a
+        movlw   0x01
+        movwf   TRISC, a
         clrf    ANSEL, a                         ; Set IOs to digital.
         clrf    ANSELH, a
         movlw   0x21                             ; Set baudrate to 115200.
@@ -69,6 +72,7 @@ io_init macro
         bsf     RCSTA, SPEN, a
         bsf     TXSTA, TXEN, a
         bsf     RCSTA, CREN, a
+        bsf     IOCA, IOCA4, a                   ; Enable interrupt on RA4.
         endm
 
     else
@@ -91,10 +95,11 @@ pll_startup_delay macro
     #include n64gc_comm.inc
 
     ;; Hardware declarations
-    #define NINTENDO_PIN    PORTA, 5
-    #define NINTENDO_TRIS   TRISA, 5
-    #define RX232_PIN   PORTB, 5
-    #define TX232_PIN   PORTB, 7
+    #define PROBE_PIN       PORTA, 4
+    #define NINTENDO_PIN    PORTC, 0
+    #define NINTENDO_TRIS   TRISC, 0
+    #define RX232_PIN       PORTB, 5
+    #define TX232_PIN       PORTB, 7
 
     ;; Reset and interrupt vectors
     org 0x00
@@ -118,7 +123,7 @@ pll_startup_delay macro
 
 startup
     movlb   0x00                                 ; Set bank 0 active.
-    bcf     INTCON, GIE                          ; Disable interrupts.
+    bcf     INTCON, GIE, a                       ; Disable interrupts.
     movlw   0x70                                 ; Set internal clock to 16 MHz.
     movwf   OSCCON, a
     pll_startup_delay                            ; Wait for PLL to shift frequency to 64 MHz.
@@ -131,6 +136,10 @@ main_loop
     xorlw   0x7E
     btfss   STATUS, Z, a
     goto    main_loop                            ; Wait for the beginning of command marker, 0x7E
+
+    movf    PORTA, w, a                          ; Clear RA4 transition.
+    nop
+    bcf     INTCON, RABIF, a
 
     call    serial_rx                            ; Save the transmit and receive counts
     movwf   cmd_tx_count, b
@@ -165,6 +174,9 @@ nothing_to_transmit
     goto    main_loop
     call    nintendo_rx
 
+    movlw   0x00                                 ; Transmit the transition detection byte
+    btfsc   INTCON, RABIF, a
+    movlw   0x01
     call    serial_tx
 
     movlw   buffer                               ; Send the data we received

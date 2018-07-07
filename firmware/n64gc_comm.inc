@@ -337,7 +337,7 @@ bit_loop
         clrwdt
     endif
 
-    btfsc   port, bit                            ; 0.0000us  Poll for the beginning of the bit, max 0.1875us jitter.
+    btfsc   port, bit, a                         ; 0.0000us  Poll for the beginning of the bit, max 0.1875us jitter.
     goto    bit_loop                             ; 0.0625us
     ;; nop (goto 2nd word)                       ; 0.1250us
 
