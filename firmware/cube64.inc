@@ -239,3 +239,15 @@ movf_config_js macro axis_byte
     endif
     endm
 
+set_interrupt macro
+    movf    PORTA, w, a
+    movf    PORTB, w, a
+    nop
+    bcf     INTCON, RABIF, a
+    bsf     INTCON, GIEH, a
+    endm
+
+clr_interrupt macro
+    bcf     INTCON, GIEH, a
+    endm
+

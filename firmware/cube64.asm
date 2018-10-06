@@ -164,7 +164,7 @@ startup
     movlb   0x00                                 ; Set bank 0 active for non-mirrored data.
     clrf    FSR2H, a
     clrf    FSR2L, a
-    bcf     INTCON, GIE, a                       ; Init interrupts.
+    clr_interrupt                                ; Init interrupts.
     bsf     INTCON, RABIE, a
     bsf     INTCON2, RABIP, a
     bsf     RCON, IPEN, a
@@ -218,11 +218,7 @@ startup
     call    validate_eeprom
 
 int_reentry
-    movf    PORTA, w, a
-    movf    PORTB, w, a
-    nop
-    bcf     INTCON, RABIF, a
-    bsf     INTCON, GIEH, a
+    set_interrupt
     call    gamecube_wait_for_idle
     call    gamecube_init
 main_loop
@@ -905,7 +901,9 @@ menu_level1_special
 
 menu_level1_reset_active_layout
     movlw   0x00
+    clr_interrupt
     call    reset_active_eeprom_layout
+    set_interrupt
     goto    start_rumble_feedback
 
 menu_level1_trigger_flag_set
@@ -1013,7 +1011,9 @@ menu_level2_preset
     bcf     STATUS, C, a
     rlcf    level2_button, f, b
     swapf   level2_button, w, b
+    clr_interrupt
     call    reset_active_eeprom_layout
+    set_interrupt
     goto    start_rumble_feedback
 
 menu_level2_preset_invalid
@@ -1211,15 +1211,12 @@ reset_eeprom
 
     movlw   EEPROM_LAYOUT_0                      ; Loop over all virtual buttons, writing the identity mapping.
     movwf   EEADR, a
-next_eeprom_bank
     clrf    TBLPTRL, a
     TBLRD*
     movff   TABLAT, EEDATA
+    movlw   EEPROM_LAYOUT_SIZE*4                 ; Init EEPROM with the 4 first layout presets.
+    movwf   temp, b
     call    reset_next_byte
-    movf    EEADR, w, a
-    xorlw   EEPROM_LAYOUT_0 + EEPROM_LAYOUT_SIZE * 4
-    btfss   STATUS, Z, a
-    goto    next_eeprom_bank
 
     movlw   EEPROM_MAGIC_ADDR                    ; Write the magic word
     movwf   EEADR, a
@@ -1237,16 +1234,18 @@ next_eeprom_bank
     movlw   0x00
     movwf   EEDATA, a
     goto    eewrite
+    goto    validate_eeprom
 
     ;; Reset only data relative to the current active button mapping layout
     ;; using preset in 'w'.
 reset_active_eeprom_layout
-    bcf     INTCON, GIEH, a
     clrf    nv_config_js, b
     clrf    nv_config_cs, b
     movwf   TBLPTRL, a
     movlw   high eeprom_default                  ; Load address for EEPROM layout default.
     movwf   TBLPTRH, a
+    movlw   EEPROM_LAYOUT_SIZE
+    movwf   temp, b
 
     movf    nv_flags, w, b
     andlw   LAYOUT_MASK
@@ -1261,15 +1260,8 @@ reset_next_byte
     incf    EEADR, f, a
     TBLRD+*
     movff   TABLAT, EEDATA
-    movf    TBLPTRL, w, a
-    xorlw   EEPROM_LAYOUT_SIZE
-    btfss   STATUS, Z, a
-    goto    reset_next_byte
-    movf    PORTA, w, a
-    movf    PORTB, w, a
-    nop
-    bcf     INTCON, RABIF, a
-    bsf     INTCON, GIEH, a
+    decfsz  temp, f, b
+    bra     reset_next_byte
     return
 
     ;; Read from address 'w' of the EEPROM, return in 'w'.
