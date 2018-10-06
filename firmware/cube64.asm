@@ -52,18 +52,26 @@
 io_init macro
         clrf    PORTA, a
         clrf    PORTB, a
-        clrf    WPUA, a                          ; Disable pull-ups.
-        clrf    WPUB, a
-        movlw   0xDF
+        clrf    PORTC, a
+        movlw   0x14                             ; Enable weak pull-ups.
+        movwf   WPUA, a
+        movlw   0x50
+        movwf   WPUB, a
+        bcf     INTCON2, RABPU, a
+        movlw   0x14
         movwf   TRISA, a
-        setf    TRISB, a
-        clrf    PORTC, a                         ; Debug port
+        movlw   0xD0
+        movwf   TRISB, a
         clrf    TRISC, a                         ; Debug port
         clrf    ANSEL, a                         ; Set IOs to digital.
         clrf    ANSELH, a
         bsf     IOCB, IOCB4, a                   ; Enable interrupt on N64_PIN.
-        btfsc   N64_PIN2, a                      ; If 2nd port connected,
         bsf     IOCB, IOCB6, a                   ; enable interrupt on N64_PIN2.
+        movlw   0x21                             ; Set baudrate to 115200.
+        movwf   SPBRG, a
+        bsf     TXSTA, BRGH, a
+        bsf     RCSTA, SPEN, a
+        bsf     TXSTA, TXEN, a
         endm
 
     else
@@ -157,7 +165,6 @@ startup
     clrf    FSR2L, a
     bcf     INTCON, GIE, a                       ; Init interrupts.
     bsf     INTCON, RABIE, a
-    bsf     INTCON2, RABPU, a
     bsf     INTCON2, RABIP, a
     bsf     RCON, IPEN, a
     movlw   0x70                                 ; Set internal clock to 16 MHz.
@@ -1346,9 +1353,7 @@ n64_detect_command
     btfsc   FLAG_CTRL2
     bra     n64_detect_base_cmd
 
-ifndef DBG_TRACE
     btfsc   FLAG_BYPASS_MODE
-endif
     bra     n64_bypass_mode
 
     ;; We need to handle controller pak writes very fast because there's no pause
@@ -1431,15 +1436,7 @@ n64_bypass_mode
     movf    n64_command, w, b
     xorlw   N64_COMMAND_STATUS
     btfsc   STATUS, Z, a
-
-    ;; In tracing mode the adaptor simply passthough everything and
-    ;; copy it on the debug port.
-ifdef DBG_TRACE
-    goto    n64_status_copy
-else
     goto    n64_send_status
-endif
-
     return
 
     ;; Copy 3 bytes from controller to host.

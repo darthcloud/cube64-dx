@@ -163,11 +163,6 @@ three--
     #define N64_JOYSTICK_X  2
     #define N64_JOYSTICK_Y  3
 
-    ;; Debug
-    ;;#define DBG_CRC
-    ;;#define DBG_SI
-    ;;#define DBG_TRACE
-
 n64gc_init macro
     ;; Put us back in bank 0 with a bit_count of 8, preconditions for rx_buffer
     movlw   8
@@ -206,9 +201,6 @@ n64gc_tx_buffer macro port, bit, wide_stop_bit
     mulwf   byte_count, b
     movff   PRODL, TBLPTRL                       ; Wrap to 0xFF once at 31 bytes left.
     subwf   TBLPTRL, f, a                        ; Subtract CRC bits.
-    ifdef DBG_SI
-       movff   INDF1, PORTC
-    endif
 
     ;; Each bit always takes 4us, but there are several possible control paths...
     ;; Every line has been numbered with the number of microseconds since the
@@ -236,13 +228,7 @@ bit_loop                                         ; 3.1250us
 a                                                ; a: 0.1875us  Make sure we spend the same amount
     wait    .4                                   ; a: 0.2500us  of time in both paths.
 b                                                ; b: 0.4375us
-    wait    .4                                   ; 0.5000us
-
-    ifdef DBG_CRC                                ; 0.7500us
-        movff   crc_work, PORTC
-    else
-        wait    .2
-    endif
+    wait    .6                                   ; 0.5000us
 
     rlncf   INDF1, f, a                          ; 0.8750us  Rotate the next bit into C.
     btfsc   INDF1, 0, a                          ; 0.9375us  Our bit is in the C flag...
@@ -274,14 +260,7 @@ b                                                ; b: 0.4375us
                                                  ; stop bit, so it ends 2.4 us after we return.
 
 not_last_byte                                    ; 1.3750us
-    ifdef DBG_SI
-        wait    .20
-    else
-        wait    .22                              ; 1.4375us
-    endif
-    ifdef DBG_SI
-       movff   INDF1, PORTC
-    endif
+    wait    .22                                  ; 1.4375us
     movlw   8                                    ; 2.8125us  Reinitialize the bit counter.
     movwf   bit_count, b                         ; 2.8750us
     btfss   INDF1, 0, a                          ; 2.9375us
@@ -361,12 +340,6 @@ bit_loop
     movf    TABLAT, w, a                         ; 2.1250us
     btfsc   INDF1, 0, a                          ; 2.1875us
     xorwf   crc_work, f, b                       ; 2.2500us  If bit set, XOR table value with CRC.
-    ifdef DBG_CRC
-        movff   crc_work, PORTC
-    endif
-    ifdef DBG_SI
-        movff   INDF1, PORTC
-    endif
     decfsz  byte_count, f, b                     ; 2.3125us  Is this the last byte?
     goto    not_last_byte                        ; 2.3750us  Yet another alternate ending for the last byte...
     ;; nop (goto 2nd word)                       ; 2.4375us
@@ -387,9 +360,6 @@ not_last_bit                                     ; 1.6250us
     movf    TABLAT, w, a                         ; 2.1250us
     btfsc   INDF1, 0, a                          ; 2.1875us
     xorwf   crc_work, f, b                       ; 2.2500us  If bit set, XOR table value with CRC.
-    ifdef DBG_CRC
-        movff   crc_work, PORTC
-    endif
     btfsc   port, bit, a                         ; 2.3125us  Wait for the data line to go back high.
     goto    bit_loop                             ; 2.3750us
     ;; nop (goto 2nd word)                       ; 2.4375us
@@ -402,10 +372,10 @@ n64_rx_command_start macro ctrl1
     wait    .4                                   ; 0.6875us  We get into the interrupt at around 0.4 us.
     btg     FSR2L, 2, a                          ; 0.9375us  Use last good regs copy.
     clrf    FSR2H, a                             ; 1.0000us  Point to buffers on bank 0.
-    bsf     GAMECUBE_TRIS                        ; 1.0625us
+    bsf     GAMECUBE_TRIS, a                     ; 1.0625us
     if ctrl1
-        bcf     N64C_PIN                         ; 1.1250us  Finish secondary port setup.
-        bcf     N64C_TRIS                        ; 1.1875us  *0.0000us Copy's next bit falling edge.
+        bcf     N64C_PIN, a                      ; 1.1250us  Finish secondary port setup.
+        bcf     N64C_TRIS, a                     ; 1.1875us  *0.0000us Copy's next bit falling edge.
     else
         bsf     FLAG_CTRL2                       ; 1.1250us  2nd controller poll.
         incf    FSR2H, f, a                      ; 1.1875us  Point to buffers on bank 1.
@@ -423,14 +393,14 @@ n64_rx_command_start macro ctrl1
     rlcf    INDF1, f, a                          ; 1.8750us  Make room for the new bit.
     bcf     INDF1, 0, a                          ; 1.9375us  Assume it's 0 to begin with.
     if ctrl1
-        btfsc   N64_PIN                          ; 2.0000us  Sample the incoming bit.
+        btfsc   N64_PIN, a                       ; 2.0000us  Sample the incoming bit.
     else
-        btfsc   N64_PIN2                         ; 2.0000us  Sample the incoming bit.
+        btfsc   N64_PIN2, a                      ; 2.0000us  Sample the incoming bit.
     endif
     bsf     INDF1, 0, a                          ; 2.0625us
     if ctrl1
         btfsc   INDF1, 0, a                      ; 2.1250us
-        bsf     N64C_TRIS                        ; 2.1875us  *1.0000us Copy's 'one bit' rising edge.
+        bsf     N64C_TRIS, a                     ; 2.1875us  *1.0000us Copy's 'one bit' rising edge.
     else
         wait    .2                               ; 2.1250us
     endif
@@ -441,9 +411,9 @@ n64_rx_command_start macro ctrl1
     movf    PORTA, w, a                          ; 2.5000us
     movf    PORTB, w, a                          ; 2.5625us
     if ctrl1
-        btfss   N64_PIN                          ; 2.6250us  Wait for the data line to go back high.
+        btfss   N64_PIN, a                       ; 2.6250us  Wait for the data line to go back high.
     else
-        btfss   N64_PIN2
+        btfss   N64_PIN2, a
     endif
     bra     $-2                                  ; 2.6875us
     endm
@@ -491,9 +461,6 @@ bit_loop
         bcf     port2, bit2, a                   ; *4.0000us Copy's stop bit.
         wait    .31                              ; *4.0625us
         bsf     port2, bit2, a                   ; *6.0000us
-    ifdef DBG_TRACE
-        movff   INDF1, PORTC
-    endif
     endif
 
     return                                       ; 2.2500us
@@ -505,9 +472,6 @@ not_last_byte                                    ; 1.5625us
     bsf     INDF1, 0, a                          ; 2.0625us
     btfsc   INDF1, 0, a                          ; 2.1250us
     bsf     port2, bit2, a                       ; 2.1875us  *1.0000us Copy's 'one bit' rising edge.
-    ifdef DBG_TRACE
-        movff   INDF1, PORTC
-    endif
     incf    FSR1L, f, a                          ; 2.2500us  Next byte...
     movwf   bit_count, b                         ; 2.3125us  Reset bit count.
     btfsc   port, bit, a                         ; 2.3750us  Wait for the data line to go back high.
