@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.5] - 2018-10-06
+### Added
+ - Pre-defined button layout.
+ - Two buttons special mapping options for A+C-Down and B+C-Left.
+ - Turbo buttons special feature.
+
+### Changed
+ - Serial bridge ported to PIC18F14K22.
+
 ## [3.4] - 2018-06-21
 ### Added
  - Joystick response curve per axis and layout.

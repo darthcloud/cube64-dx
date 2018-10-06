@@ -34,17 +34,19 @@ The default button mapping is as follows:
 
 GameCube | N64
 -------- | ---
-Analog stick | Analog stick
-D-pad | D-pad
-A | A
-B | B
-Z | Z
-Start | Start
-R | R
-L | L
-C-stick | C buttons
-X | C-down
-Y | C-left
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_js.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_js.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_a.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_a.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_b.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_b.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_z.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_cright.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_start.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_start.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_dr.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_r.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_dl.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_z.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_cs.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_c.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_x.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_cdown.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_y.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_cleft.png)
+
+By default the adaptor layout banks are loaded with the first four preset.
+See [wiki](https://github.com/darthcloud/cube64-dx/wiki) for more information on the preset.
 
 ### Main menu
 
@@ -74,10 +76,23 @@ gameplay. To change the mapping for one button or axis direction:
   3. Press the button you wish to remap. This includes any button or axis direction.
 
   4. Press the button you want to map it to. This button is always interpreted
-     according to the above defaults.
+     according to the table below.
 
   5. If the mapping was successful and you have rumble power connected, you should feel
      a brief rumble.
+
+GameCube | N64
+-------- | ---
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_js.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_js.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_a.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_a.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_b.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_b.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_z.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_z.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_start.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_start.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_dr.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_r.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_dl.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_l.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_cs.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_c.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_x.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/none.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_y.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/none.png)
 
 #### Special function
 
@@ -101,7 +116,13 @@ It's possible to map a special function to a button instead of a N64 button.
 
 GameCube | Function
 -------- | --------
-D-pad | Temporary overwrite current mapping layout <br/>with layout corresponding to the D-pad <br/>direction until button is released.
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_d.png) | Temporary overwrite current mapping layout <br/>with layout corresponding to the D-pad <br/>direction until button is released.
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_a.png) | A+C-Down two buttons mapping.
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_b.png) | B+C-Right two buttons mapping.
+![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_cup.png) | Turbo disable (Default).
+![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_cleft.png) | Faster turbo.
+![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_cright.png) | Medium turbo.
+![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_cdown.png) | Slower turbo.
 
 #### Mapping analog trigger axes
 
@@ -194,8 +215,21 @@ Scale and curve setting are save independently for each axis and each layout.
   6. If you have the rumble power connected and the layout change was successful, you should
      feel a brief rumble.
 
-This option is saved into the EEPROM so the next time you power up the adaptor the last 
+This option is saved into the EEPROM so the next time you power up the adaptor the last
 used setting will be reloaded automatically.
+
+#### Preconfigured button mapping layout
+
+Eight pre-defined button mapping layout can be loaded in the currently active layout.
+See [wiki](https://github.com/darthcloud/cube64-dx/wiki) for preset detail.
+
+  1. While in the main menu, press D-pad DOWN.
+
+  2. If you have the rumble power connected, you should feel a brief rumble.
+
+  3. Press any direction on GC D-pad or main joystick to choose one preset.
+
+  4. If you have the rumble power connected, you should feel a brief rumble.
 
 ### Calibration
 
@@ -215,7 +249,7 @@ joystick, C-stick, L button, or R button:
 
 ### 1 player 2 controllers control style
 
-If connected to two ports of the system at boot time, the adaptor will answer automatically
+If connected to two ports of the system, the adaptor will answer automatically
 a limited button status and identity commands on the 2nd port. This allows
 to play GoldenEye 007 and Perfect Dark using their respective 1 player 2 controller
 control style.
@@ -277,3 +311,8 @@ Utilities and documentation produced while reverse engineering.
 * [Original repository archive](https://github.com/scanlime/navi-misc/tree/master/wasabi/devices/cube64)
 * [Google Code repository archive](https://code.google.com/archive/p/cube64-dx/)
 * [Blog post](http://scanlime.org/2011/03/cube64-gamecube-to-n64-adaptor/)
+
+## Buttons graphic sources
+* N64: [Toomai](https://www.ssbwiki.com/User:Toomai) @[ssbwiki.com](https://www.ssbwiki.com/User:Toomai/SVG_test_page)
+* GC: [Flark](https://wiibrew.org/wiki/User:Flark) & [Crayon](https://wiibrew.org/wiki/User:Crayon) @[wiibrew.org](https://wiibrew.org/wiki/Category:Controller_Buttons)
+* SVGs: Clone https://github.com/darthcloud/cube64-dx.wiki.git
