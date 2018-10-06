@@ -103,7 +103,9 @@ pll_startup_delay macro
         n64_status_buffer1:4
         flags
         flags2
-        menu_flags
+        option_flags
+        atomic_flags
+        uncommit_flags
         nv_flags
         nv_config_js
         nv_config_cs
@@ -115,8 +117,8 @@ pll_startup_delay macro
         bus_byte_count
         virtual_map
         calibration_count
-        remap_source_button
-        remap_dest_button
+        level2_button
+        level3_button
         target_slot_status
         temp_key_map
         crc_work
@@ -170,7 +172,9 @@ startup
     call    clear_n64_status_buffer
     clrf    flags, b
     clrf    flags2, b
-    clrf    menu_flags, b
+    clrf    option_flags, b
+    clrf    uncommit_flags, b
+    clrf    atomic_flags, b
     clrf    nv_flags, b
     clrf    nv_config_js, b
     clrf    nv_config_cs, b
@@ -613,7 +617,7 @@ n64_translate_restart
     bcf     FLAG_AXIS
 
     btfsc   FLAG_NO_VIRTUAL_BTNS
-    bcf     FLAG_WAITING_FOR_RELEASE
+    bcf     AFLAG_WAITING_FOR_RELEASE
     bcf     FLAG_LAYOUT_MODIFIER
     return
 
@@ -708,24 +712,16 @@ remap_virtual_button
     bcf     FLAG_NO_VIRTUAL_BTNS
 
     ;; Leave now if we're waiting for buttons to be released
-    btfsc   FLAG_WAITING_FOR_RELEASE
+    btfsc   AFLAG_WAITING_FOR_RELEASE
     return
 
     ;; Accept buttons presses if we're waiting for one
-    btfsc   FLAG_TOP_CONFIG_MENU
-    goto    accept_config_menu_select
-    btfsc   FLAG_SOURCE_WAIT
-    goto    accept_source
-    btfsc   FLAG_REMAP
-    goto    accept_remap_dest
-    btfsc   FLAG_SPECIAL
-    goto    accept_special_dest
-    btfsc   FLAG_MODE_SUBMENU
-    goto    accept_mode_select
-    btfsc   FLAG_LAYOUT_SUBMENU
-    goto    accept_layout_select
-    btfsc   FLAG_JOYSTICK
-    goto    accept_joystick_config
+    btfsc   AFLAG_MENU_LEVEL1
+    goto    menu_level1
+    btfsc   AFLAG_MENU_LEVEL2
+    goto    menu_level2
+    btfsc   AFLAG_MENU_LEVEL3
+    goto    menu_level3
 
     ;; Pass anything else on to the N64, mapped through the EEPROM first
     eeprom_btn_addr temp_key_map, 0
@@ -747,7 +743,7 @@ remap_virtual_axis
     ;; Looks for the key combinations we use to change button mapping
 check_remap_combo
     ;; Leave now if we're waiting for buttons to be released
-    btfsc   FLAG_WAITING_FOR_RELEASE
+    btfsc   AFLAG_WAITING_FOR_RELEASE
     return
 
     ;; Key combinations require that the L and R buttons be mostly pressed.
@@ -771,229 +767,136 @@ check_remap_combo
     ;; access to. Selection is handled into remap_virtual_button since we need virtual
     ;; button codes.
     bcf     LED_PIN, a
-    movf    menu_flags, w, b
-    iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
-    iorlw   BIT_TOP_CONFIG_MENU                  ; bsf     FLAG_TOP_CONFIG_MENU
-    movwf   temp, b
+    movff   atomic_flags, uncommit_flags
+    bsf     UFLAG_WAITING_FOR_RELEASE
+    bsf     UFLAG_MENU_LEVEL1
     goto    start_rumble_feedback
 
-    ;; Accept the virtual button pressed for menu selection in 'w', and
-    ;; set the right flag for next user input.
-accept_config_menu_select
-    movf    menu_flags, w, b
-    andlw   ~BIT_TOP_CONFIG_MENU                 ; bcf     FLAG_TOP_CONFIG_MENU
-    iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
+    ;; Set the right flags for next user input 
+menu_level1
+    clrf    option_flags, b
+    movff   atomic_flags, uncommit_flags
+    bcf     UFLAG_MENU_LEVEL1
+    bsf     UFLAG_WAITING_FOR_RELEASE
 
     ;; The remap button combo was pressed. Give feedback via the rumble motor,
     ;; and await button presses from the user indicating what they want to remap.
     ;; We actually read the source and destination keys in remap_virtual_button,
     ;; since we need virtual button codes.
     btfsc   gamecube_buffer + GC_START, b
-    bra     menu_remap_source_wait
+    bra     menu_level1_remap
 
     ;; The special function combo was pressed. Same process as remap combo.
     btfsc   gamecube_buffer + GC_Y, b
-    bra     menu_special_source_wait
+    bra     menu_level1_special
 
     bcf     FLAG_TRIGGER                         ; Flag not used in following commands.
 
     ;; The analog trigger mapping combo was pressed.
     ;; This modify both remap and special combo to allow mapping to analog trigger.
     btfsc   gamecube_buffer + GC_X, b
-    bra     menu_trigger_flag_set
+    bra     menu_level1_trigger_flag_set
 
     ;; The reset combo was pressed. Reset the EEPROM contents of the current active button
     ;; layout, and use the rumble motor for feedback if possible.
     btfsc   gamecube_buffer + GC_Z, b
-    bra     menu_reset_active_eeprom_layout
+    bra     menu_level1_reset_active_layout
 
     ;; The adapter mode submenu was selected in the config menu.
     btfsc   gamecube_buffer + GC_D_UP, b
-    bra     menu_mode_submenu
+    bra     menu_level1_mode
 
     ;; The button layout submenu was selected in the config menu.
     btfsc   gamecube_buffer + GC_D_LEFT, b
-    bra     menu_layout_submenu
+    bra     menu_level1_layout
 
     ;; Joysticks config menu.
     btfsc   gamecube_buffer + GC_D_RIGHT, b
-    bra     menu_joystick_source_wait
+    bra     menu_level1_joystick
 
-    movwf   menu_flags, b                        ; Set flags as atomic operations. Avoid disabling interrupt.
+    movff   uncommit_flags, atomic_flags         ; Set flags as atomic operations. Avoid disabling interrupt.
     return
 
-menu_remap_source_wait
-    iorlw   BIT_REMAP                            ; bsf     FLAG_REMAP
-    iorlw   BIT_SOURCE_WAIT                      ; bsf     FLAG_SOURCE_WAIT
-    movwf   temp, b
+menu_level1_mode
+    bsf     OFLAG_MODE
+    bsf     UFLAG_MENU_LEVEL2
     goto    start_rumble_feedback
 
-menu_special_source_wait
-    iorlw   BIT_SPECIAL                          ; bsf     FLAG_SPECIAL
-    iorlw   BIT_SOURCE_WAIT                      ; bsf     FLAG_SOURCE_WAIT
-    movwf   temp, b
+menu_level1_layout
+    bsf     OFLAG_LAYOUT
+    bsf     UFLAG_MENU_LEVEL2
     goto    start_rumble_feedback
 
-menu_trigger_flag_set
-    bsf     FLAG_TRIGGER
-    iorlw   BIT_TOP_CONFIG_MENU                  ; bsf     FLAG_TOP_CONFIG_MENU
-    movwf   temp, b
+menu_level1_joystick
+    bsf     OFLAG_JOYSTICK
+    bsf     UFLAG_MENU_LEVEL2
     goto    start_rumble_feedback
 
-menu_reset_active_eeprom_layout
-    movwf   temp, b
+menu_level1_remap
+    bsf     OFLAG_REMAP
+    bsf     UFLAG_MENU_LEVEL2
+    goto    start_rumble_feedback
+
+menu_level1_special
+    bsf     OFLAG_SPECIAL
+    bsf     UFLAG_MENU_LEVEL2
+    goto    start_rumble_feedback
+
+menu_level1_reset_active_layout
     call    reset_active_eeprom_layout
     goto    start_rumble_feedback
 
-menu_mode_submenu
-    iorlw   BIT_MODE_SUBMENU                     ; bsf     FLAG_MODE_SUBMENU
-    movwf   temp, b
+menu_level1_trigger_flag_set
+    bsf     FLAG_TRIGGER
+    bsf     UFLAG_MENU_LEVEL1
     goto    start_rumble_feedback
 
-menu_layout_submenu
-    iorlw   BIT_LAYOUT_SUBMENU                   ; bsf     FLAG_LAYOUT_SUBMENU
-    movwf   temp, b
-    goto    start_rumble_feedback
-
-menu_joystick_source_wait
-    iorlw   BIT_JOYSTICK
-    iorlw   BIT_SOURCE_WAIT
-    movwf   temp, b
-    goto    start_rumble_feedback
-
-    ;; Accept the virtual button code for the remap source in 'w', and prepare
-    ;; to accept the remap destination.
-accept_source
-    movwf   remap_source_button, b
-    movf    menu_flags, w, b
-    iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
-    andlw   ~BIT_SOURCE_WAIT                     ; bcf     FLAG_SOURCE_WAIT
-    movwf   temp, b
+    ;; Accept the virtual button code in 'w'. Jump to proper submenu handler.
+menu_level2
+    movwf   level2_button, b
+    movff   atomic_flags, uncommit_flags
+    bsf     UFLAG_WAITING_FOR_RELEASE
+    bcf     UFLAG_MENU_LEVEL2
 
     bcf     FLAG_CS
     bcf     FLAG_AXIS_Y
 
-    btfss   FLAG_JOYSTICK
-    goto    start_rumble_feedback
+    btfsc   OFLAG_MODE
+    bra     menu_level2_mode
+    btfsc   OFLAG_LAYOUT
+    bra     menu_level2_layout
 
-    movf    remap_source_button, w, b
-    andlw   ~LAYOUT_MASK
-    xorlw   BTN_LJ_UP
-    bz      check_axis
+    bsf     UFLAG_MENU_LEVEL3
 
-    movf    remap_source_button, w, b
-    andlw   ~LAYOUT_MASK
-    xorlw   BTN_RJ_UP
-    bz      check_axis-2
+    btfsc   OFLAG_JOYSTICK
+    bra     menu_level2_joystick
 
-    movf    temp, w, b
-    andlw   ~BIT_JOYSTICK
-    movwf   temp, b
-    movff   temp, menu_flags
-    return
-
-    bsf     FLAG_CS
-check_axis
-    decf    remap_source_button, f, b
-    btfsc   remap_source_button, 1, b            ; Check if X or Y axis.
-    bsf     FLAG_AXIS_Y
-    incf    remap_source_button, f, b
-
-    goto    start_rumble_feedback
-
-    ;; Accept the virtual button code for the remap destination in 'w', and write
-    ;; the button mapping to EEPROM.
-accept_remap_dest
-    movwf   EEDATA, a                            ; Destination button is data, source is address.
-    movf    menu_flags, w, b
-    iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
-    andlw   ~BIT_REMAP                           ; bcf     FLAG_REMAP
-    movwf   temp, b
-
-    bra     common_accept_dest
-
-    ;; Accept the virtual button code for the special function destination in 'w'.
-accept_special_dest
-    movwf   EEDATA, a
-    movf    menu_flags, w, b
-    iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
-    andlw   ~BIT_SPECIAL                         ; bcf     FLAG_SPECIAL
-    movwf   temp, b
-
-    ;; Validate if one of the D-pad direction is pressed for the layout modifier function.
-    ;; Save as a special button if so, return otherwise.
-    movf    EEDATA, w, a
-    andlw   ~LAYOUT_MASK                         ; Check for any D-pad direction.
-    bz      common_accept_dest - 2
-    movf    temp, w, b
-    bcf     FLAG_TRIGGER
-    movwf   menu_flags, b                        ; Set flags as atomic operations. Avoid disabling interrupt.
-    return
-
-    bsf     EEDATA, SPECIAL_BIT, a
-common_accept_dest
-    movf    remap_source_button, w, b
-    movwf   temp2, b
-    btfsc   FLAG_TRIGGER                         ; If flag set, this means we want to allow analog trigger mapping.
-    bra     save_mapping
-
-    andlw   TRIGGER_TYPE_MASK
-    xorlw   BTN_LA
-    btfsc   STATUS, Z, a                         ; If analog trigger, overwrite source with digital trigger.
-    incf    temp2, f, b
-
-save_mapping
-    movf    temp2, w, b
-    mullw   EEPROM_BTN_BYTE                      ; Offset base on how many bytes per button.
-    movff   PRODL, EEADR
-    movf    nv_flags, w, b                       ; Add offset to EEPROM address to read the right custom buttons layout.
-    andlw   LAYOUT_MASK
-    mullw   EEPROM_LAYOUT_SIZE
-    movf    PRODL, w, a
-    addwf   EEADR, f, a
-    call    eewrite
-    bcf     FLAG_TRIGGER
     goto    start_rumble_feedback
 
     ;; Accept the adapter mode selection.
-accept_mode_select
+menu_level2_mode
     movwf   target_slot_status, b
-    movf    menu_flags, w, b
-    iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
-    andlw   ~BIT_MODE_SUBMENU                    ; bcf     FLAG_MODE_SUBMENU
-    movwf   temp, b
-
-    movf    target_slot_status, w, b
     xorlw   BTN_D_DOWN
-    bnz     valid_mode
-    movff   temp, menu_flags                     ; Set flags as atomic operations. Avoid disabling interrupt.
+    bnz     menu_level2_mode_valid
+    movff   uncommit_flags, atomic_flags         ; Set flags as atomic operations. Avoid disabling interrupt.
     return
 
-valid_mode
+menu_level2_mode_valid
     movlw   0x02
     movwf   n64_slot_status, b
 
-    movf    flags, w, b
-    iorlw   BIT_FORCE_EMPTIED                    ; bsf     FLAG_FORCE_EMPTIED
-    andlw   ~BIT_BYPASS_MODE                     ; bcf     FLAG_BYPASS_MODE
-    movwf   flags, b
+    bsf     FLAG_FORCE_EMPTIED
+    bcf     FLAG_BYPASS_MODE
     goto    start_rumble_feedback
 
     ;; Accept the button layout selection.
-accept_layout_select
-    movwf   remap_source_button, b
-    movf    menu_flags, w, b
-    iorlw   BIT_WAITING_FOR_RELEASE              ; bsf     FLAG_WAITING_FOR_RELEASE
-    andlw   ~BIT_LAYOUT_SUBMENU                  ; bcf     FLAG_LAYOUT_SUBMENU
-    movwf   temp, b
-
-    movf    remap_source_button, w, b
+menu_level2_layout
     andlw   ~LAYOUT_MASK                         ; Check for any D-pad direction.
-    bnz     cancel_layout_select
+    bnz     menu_level2_layout_invalid
 
     movlw   ~LAYOUT_MASK
     andwf   nv_flags, f, b
-    movf    remap_source_button, w, b
+    movf    level2_button, w, b
     iorwf   nv_flags, f, b
 
     movff   nv_flags, EEDATA
@@ -1016,18 +919,51 @@ accept_layout_select
     movwf   nv_config_cs, b
     goto    start_rumble_feedback
 
-cancel_layout_select
-    movff   temp, menu_flags                     ; Set flags as atomic operations. Avoid disabling interrupt.
+menu_level2_layout_invalid
+    movff   uncommit_flags, atomic_flags         ; Set flags as atomic operations. Avoid disabling interrupt.
     return
 
-accept_joystick_config
-    movwf   remap_dest_button, b
+menu_level2_joystick
+    andlw   ~LAYOUT_MASK
+    xorlw   BTN_LJ_UP
+    bz      menu_level2_joystick_check_axis
 
-    movf    menu_flags, w, b
-    iorlw   BIT_WAITING_FOR_RELEASE
-    andlw   ~BIT_JOYSTICK
-    movwf   temp, b
+    movf    level2_button, w, b
+    andlw   ~LAYOUT_MASK
+    xorlw   BTN_RJ_UP
+    bz      menu_level2_joystick_check_axis-2
 
+    bcf     UFLAG_MENU_LEVEL3
+    movff   uncommit_flags, atomic_flags
+    return
+
+    bsf     FLAG_CS
+menu_level2_joystick_check_axis
+    decf    level2_button, f, b
+    btfsc   level2_button, 1, b                  ; Check if X or Y axis.
+    bsf     FLAG_AXIS_Y
+    incf    level2_button, f, b
+
+    goto    start_rumble_feedback
+
+    ;; Accept the virtual button code in 'w'. Jump to proper submenu handler.
+menu_level3
+    movwf   level3_button, b
+    movff   atomic_flags, uncommit_flags
+    bsf     UFLAG_WAITING_FOR_RELEASE
+    bcf     UFLAG_MENU_LEVEL3
+
+    btfsc   OFLAG_JOYSTICK
+    bra     menu_level3_joystick
+    btfsc   OFLAG_REMAP
+    bra     menu_level3_remap
+    btfsc   OFLAG_SPECIAL
+    bra     menu_level3_special
+
+    movff   uncommit_flags, atomic_flags         ; Should not get here.
+    return
+
+menu_level3_joystick
     movlw   nv_config_js
     movwf   FSR0L, a
     movlw   nv_config_cs
@@ -1035,60 +971,59 @@ accept_joystick_config
     movwf   FSR0L, a
 
     btfsc   gamecube_buffer + GC_A, b
-    bra     js_config_clr_curve
+    bra     menu_level3_joystick_clr_curve
 
     btfsc   gamecube_buffer + GC_X, b
-    bra     js_config_clr_not_scale
+    bra     menu_level3_joystick_clr_not_scale
 
     btfsc   gamecube_buffer + GC_Y, b
-    bra     js_config_set_not_scale
+    bra     menu_level3_joystick_set_not_scale
 
-    movf    remap_dest_button, w, b
+    movf    level3_button, w, b
     andlw   ~LAYOUT_MASK
-    bz      js_config_set_curve
+    bz      menu_level3_joystick_set_curve
 
-    movff   temp, menu_flags
+    movff   uncommit_flags, atomic_flags
     return
 
-js_config_clr_curve
+menu_level3_joystick_clr_curve
     movlw   ~CURVE_MASK
     btfsc   FLAG_AXIS_Y
     movlw   ~CURVE_MASK_Y
     andwf   INDF0, f, a
-    bra     js_config_save
+    bra     menu_level3_joystick_save
 
-js_config_set_curve
+menu_level3_joystick_set_curve
     movlw   ~CURVE_MASK
     btfsc   FLAG_AXIS_Y
     movlw   ~CURVE_MASK_Y
     andwf   INDF0, f, a
 
-    movf    remap_dest_button, w, b
+    movf    level3_button, w, b
     btfsc   FLAG_AXIS_Y
-    swapf   remap_dest_button, w, b
+    swapf   level3_button, w, b
     iorwf   INDF0, f, a
 
     btfss   FLAG_AXIS_Y
     bsf     INDF0, CURVE_BIT, a
     btfsc   FLAG_AXIS_Y
     bsf     INDF0, CURVE_BIT_Y, a
-    bra     js_config_save
+    bra     menu_level3_joystick_save
 
-js_config_clr_not_scale
+menu_level3_joystick_clr_not_scale
     btfss   FLAG_AXIS_Y
     bcf     INDF0, SCALE_BIT, a
     btfsc   FLAG_AXIS_Y
     bcf     INDF0, SCALE_BIT_Y, a
-    bra     js_config_save
+    bra     menu_level3_joystick_save
 
-js_config_set_not_scale
+menu_level3_joystick_set_not_scale
     btfss   FLAG_AXIS_Y
     bsf     INDF0, SCALE_BIT, a
     btfsc   FLAG_AXIS_Y
     bsf     INDF0, SCALE_BIT_Y, a
-    bra     js_config_save
 
-js_config_save
+menu_level3_joystick_save
     movlw   CONFIG_JS
     btfsc   FLAG_CS
     movlw   CONFIG_CS
@@ -1096,6 +1031,50 @@ js_config_save
     movwf   EEADR, a
     movff   INDF0, EEDATA
     call    eewrite
+    goto    start_rumble_feedback
+
+    ;; Accept the virtual button code for the remap destination in 'w', and write
+    ;; the button mapping to EEPROM.
+menu_level3_remap
+    movwf   EEDATA, a                            ; Destination button is data, source is address.
+    bra     menu_level3_common
+
+    ;; Accept the virtual button code for the special function destination in 'w'.
+menu_level3_special
+    movwf   EEDATA, a
+
+    ;; Validate if one of the D-pad directions is pressed for the layout modifier function.
+    ;; Save as a special button if so, return otherwise.
+    movf    EEDATA, w, a
+    andlw   ~LAYOUT_MASK                         ; Check for any D-pad direction.
+    bz      menu_level3_common - 2
+    bcf     FLAG_TRIGGER
+    movff   uncommit_flags, atomic_flags         ; Set flags as atomic operations. Avoid disabling interrupt.
+    return
+
+    bsf     EEDATA, SPECIAL_BIT, a
+menu_level3_common
+    movf    level2_button, w, b
+    movwf   temp2, b
+    btfsc   FLAG_TRIGGER                         ; If flag set, this means we want to allow analog trigger mapping.
+    bra     menu_level3_common_save_mapping
+
+    andlw   TRIGGER_TYPE_MASK
+    xorlw   BTN_LA
+    btfsc   STATUS, Z, a                         ; If analog trigger, overwrite source with digital trigger.
+    incf    temp2, f, b
+
+menu_level3_common_save_mapping
+    movf    temp2, w, b
+    mullw   EEPROM_BTN_BYTE                      ; Offset base on how many bytes per button.
+    movff   PRODL, EEADR
+    movf    nv_flags, w, b                       ; Add offset to EEPROM address to read the right custom buttons layout.
+    andlw   LAYOUT_MASK
+    mullw   EEPROM_LAYOUT_SIZE
+    movf    PRODL, w, a
+    addwf   EEADR, f, a
+    call    eewrite
+    bcf     FLAG_TRIGGER
     goto    start_rumble_feedback
 
 
@@ -1234,7 +1213,7 @@ start_rumble_feedback
     movwf   TMR0H, a
     movlw   0xF6
     movwf   TMR0L, a                             ; TMR0 now loaded with 0xC2F6.
-    movff   temp, menu_flags                     ; Set flags as atomic operations. Avoid disabling interrupt.
+    movff   uncommit_flags, atomic_flags         ; Set flags as atomic operations. Avoid disabling interrupt.
     return
 
     ;; At each status poll, turn on the rumble motor if we're in the middle of
@@ -1290,7 +1269,7 @@ update_slot_empty_timer
     return
 
 update_led
-    movf    menu_flags, w, b
+    movf    atomic_flags, w, b
     btfsc   STATUS, Z, a
     bsf     LED_PIN, a
     return

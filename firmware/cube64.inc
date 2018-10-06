@@ -14,39 +14,40 @@
     #define FLAG_RUMBLE_MOTOR_ON        flags, 0, b
 
     ;; Flag for detecting when all buttons are released.
-    #define BIT_NO_VIRTUAL_BTNS         0x04
-    #define FLAG_NO_VIRTUAL_BTNS        flags, 2, b
+    #define BIT_NO_VIRTUAL_BTNS         0x02
+    #define FLAG_NO_VIRTUAL_BTNS        flags, 1, b
 
     ;; Flag to force reporting emptied slot.
-    #define BIT_FORCE_EMPTIED           0x08
-    #define FLAG_FORCE_EMPTIED          flags, 3, b
+    #define BIT_FORCE_EMPTIED           0x04
+    #define FLAG_FORCE_EMPTIED          flags, 2, b
 
     ;; Flag to control menu rumble feedback.
-    #define BIT_RUMBLE_FEEDBACK         0x10
-    #define FLAG_RUMBLE_FEEDBACK        flags, 4, b
+    #define BIT_RUMBLE_FEEDBACK         0x08
+    #define FLAG_RUMBLE_FEEDBACK        flags, 3, b
 
     ;; Is the GC controller a WaveBird?
-    #define BIT_CTRL_PENDING_INIT       0x20
-    #define FLAG_CTRL_PENDING_INIT      flags, 5, b
+    #define BIT_CTRL_PENDING_INIT       0x10
+    #define FLAG_CTRL_PENDING_INIT      flags, 4, b
 
     ;; WaveBird association state.
-    #define BIT_CTRL_READY              0x40
-    #define FLAG_CTRL_READY             flags, 6, b
+    #define BIT_CTRL_READY              0x20
+    #define FLAG_CTRL_READY             flags, 5, b
 
     ;; Adaptor bypass mode.
-    #define BIT_BYPASS_MODE             0x80
-    #define FLAG_BYPASS_MODE            flags, 7, b
+    #define BIT_BYPASS_MODE             0x40
+    #define FLAG_BYPASS_MODE            flags, 6, b
+
+    ;; Joystick calibrated.
+    #define BIT_CALIBRATED              0x80
+    #define FLAG_CALIBRATED             flags, 7, b
 
     ;; Flag for tracking if remap source is an axis.
-    #define BIT_AXIS                    0x01
     #define FLAG_AXIS                   flags2, 0, b
 
     ;; Flag for button layout modification.
-    #define BIT_LAYOUT_MODIFIER         0x02
     #define FLAG_LAYOUT_MODIFIER        flags2, 1, b
 
     ;; Flag for N64 CTRL2.
-    #define BIT_CTRL2                   0x04
     #define FLAG_CTRL2                  flags2, 2, b
 
     ;; Set when we want to remap an analog trigger.
@@ -56,39 +57,24 @@
     #define FLAG_CS                     flags2, 4, b
     #define FLAG_AXIS_Y                 flags2, 5, b
 
-    ;; Joystick calibrated.
-    #define FLAG_CALIBRATED             flags2, 6, b
-
-    ;; Set when we are waiting for item selection in the top config menu.
-    #define BIT_TOP_CONFIG_MENU         0x01
-    #define FLAG_TOP_CONFIG_MENU        menu_flags, 0, b
-
-    ;; Set when we are waiting for user input in the adaptor mode submenu.
-    #define BIT_MODE_SUBMENU            0x02
-    #define FLAG_MODE_SUBMENU           menu_flags, 1, b
-
-    ;; Set when we are waiting for user input in the button layout submenu.
-    #define BIT_LAYOUT_SUBMENU          0x04
-    #define FLAG_LAYOUT_SUBMENU         menu_flags, 2, b
-
-    ;; Set when we're waiting for the source key for one of the combos.
-    #define BIT_SOURCE_WAIT             0x08
-    #define FLAG_SOURCE_WAIT            menu_flags, 3, b
-
-    ;; Set when we're waiting for the destination key for one of the combos.
-    #define BIT_REMAP                   0x10
-    #define BIT_SPECIAL                 0x20
-    #define BIT_JOYSTICK                0x40
-    #define FLAG_REMAP                  menu_flags, 4, b
-    #define FLAG_SPECIAL                menu_flags, 5, b
-    #define FLAG_JOYSTICK               menu_flags, 6, b
+    ;; Menu multi-level option flags.
+    #define OFLAG_MODE                   option_flags, 0, b
+    #define OFLAG_LAYOUT                 option_flags, 1, b
+    #define OFLAG_JOYSTICK               option_flags, 2, b
+    #define OFLAG_REMAP                  option_flags, 4, b
+    #define OFLAG_SPECIAL                option_flags, 5, b
 
     ;; We're waiting for a button to be released, cleared when no buttons are pressed.
-    #define BIT_WAITING_FOR_RELEASE     0x80
-    #define FLAG_WAITING_FOR_RELEASE    menu_flags, 7, b
+    #define UFLAG_WAITING_FOR_RELEASE    uncommit_flags, 0 ,b
+    #define AFLAG_WAITING_FOR_RELEASE    atomic_flags, 0, b
 
-    ;; Set when we want to disable GC joysticks scaling.
-    #define NV_FLAG_SCALING_OFF         nv_flags, 2, b
+    ;; Menu levels flags.
+    #define UFLAG_MENU_LEVEL1            uncommit_flags, 1, b
+    #define UFLAG_MENU_LEVEL2            uncommit_flags, 2, b
+    #define UFLAG_MENU_LEVEL3            uncommit_flags, 3 ,b
+    #define AFLAG_MENU_LEVEL1            atomic_flags, 1, b
+    #define AFLAG_MENU_LEVEL2            atomic_flags, 2, b
+    #define AFLAG_MENU_LEVEL3            atomic_flags, 3 ,b
 
     ;; Button IDs. These are a superset of the GameCube and N64, without any correspondence
     ;; with the wire protocol used by either. They're used as intermediate values when
