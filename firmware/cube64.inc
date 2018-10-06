@@ -61,6 +61,7 @@
     #define OFLAG_MODE                   option_flags, 0, b
     #define OFLAG_LAYOUT                 option_flags, 1, b
     #define OFLAG_JOYSTICK               option_flags, 2, b
+    #define OFLAG_PRESET                 option_flags, 3, b
     #define OFLAG_REMAP                  option_flags, 4, b
     #define OFLAG_SPECIAL                option_flags, 5, b
 
@@ -142,6 +143,7 @@
     #define SCALE_BIT_Y         7
     #define TRIGGER_TYPE_MASK   0xFD
     #define LAYOUT_MASK         0x03
+    #define PRESET_MASK         0x07
     #define BTN_MASK            0x1F
     #define SPECIAL_MASK        0x20
     #define SPECIAL_BIT         5

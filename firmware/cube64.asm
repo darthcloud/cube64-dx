@@ -832,6 +832,10 @@ menu_level1
     btfsc   gamecube_buffer + GC_D_RIGHT, b
     bra     menu_level1_joystick
 
+    ;; Layout preset menu.
+    btfsc   gamecube_buffer + GC_D_DOWN, b
+    bra     menu_level1_preset
+
     movff   uncommit_flags, atomic_flags         ; Set flags as atomic operations. Avoid disabling interrupt.
     return
 
@@ -850,6 +854,11 @@ menu_level1_joystick
     bsf     UFLAG_MENU_LEVEL2
     goto    start_rumble_feedback
 
+menu_level1_preset
+    bsf     OFLAG_PRESET
+    bsf     UFLAG_MENU_LEVEL2
+    goto    start_rumble_feedback
+
 menu_level1_remap
     bsf     OFLAG_REMAP
     bsf     UFLAG_MENU_LEVEL2
@@ -861,6 +870,7 @@ menu_level1_special
     goto    start_rumble_feedback
 
 menu_level1_reset_active_layout
+    movlw   0x00
     call    reset_active_eeprom_layout
     goto    start_rumble_feedback
 
@@ -883,6 +893,8 @@ menu_level2
     bra     menu_level2_mode
     btfsc   OFLAG_LAYOUT
     bra     menu_level2_layout
+    btfsc   OFLAG_PRESET
+    bra     menu_level2_preset
 
     bsf     UFLAG_MENU_LEVEL3
 
@@ -963,6 +975,20 @@ menu_level2_joystick_check_axis
     incf    level2_button, f, b
 
     goto    start_rumble_feedback
+
+menu_level2_preset
+    andlw   ~PRESET_MASK
+    bnz     menu_level2_preset_invalid
+
+    bcf     STATUS, C, a
+    rlcf    level2_button, f, b
+    swapf   level2_button, w, b
+    call    reset_active_eeprom_layout
+    goto    start_rumble_feedback
+
+menu_level2_preset_invalid
+    movff   uncommit_flags, atomic_flags         ; Set flags as atomic operations. Avoid disabling interrupt.
+    return
 
     ;; Accept the virtual button code in 'w'. Jump to proper submenu handler.
 menu_level3
@@ -1167,14 +1193,15 @@ next_eeprom_bank
     movwf   EEDATA, a
     goto    eewrite
 
-    ;; Reset only data relative to the current active button mapping layout.
+    ;; Reset only data relative to the current active button mapping layout
+    ;; using preset in 'w'.
 reset_active_eeprom_layout
     bcf     INTCON, GIEH, a
     clrf    nv_config_js, b
     clrf    nv_config_cs, b
+    movwf   TBLPTRL, a
     movlw   high eeprom_default                  ; Load address for EEPROM layout default.
     movwf   TBLPTRH, a
-    clrf    TBLPTRL, a
 
     movf    nv_flags, w, b
     andlw   LAYOUT_MASK
