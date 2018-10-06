@@ -130,6 +130,7 @@ pll_startup_delay macro
         target_slot_status
         temp_key_map
         crc_work
+        poll_cnt
 
         ;; Stored calibration for each GameCube axis.
         joystick_x_calibration
@@ -186,6 +187,7 @@ startup
     clrf    nv_config_js, b
     clrf    nv_config_cs, b
     clrf    calibration_count, b
+    clrf    poll_cnt, b
     clrf    FSR0H, a
     clrf    FSR1H, a                             ; We only need to access first bank, so we set it in FSR high byte right away.
     clrf    TBLPTRU, a                           ; Preload table upper byte. Same for all tables.
@@ -547,6 +549,26 @@ map_axis_button macro virtual, dest_byte
 next
     endm
 
+    ;; Turbo button mode check. If one of the 3 speeds is set on the GC button,
+    ;; the mask in conjunction to the poll_cnt determine if the button gets set this
+    ;; cycle or not. From slower to faster, the masks used are: 0x0E, 0x02 & 0x01.
+turbo_mode macro
+    local   set_button
+    rlncf   EEDATA, f, a
+    rlncf   EEDATA, w, a
+    andlw   TURBO_MASK
+    bz      set_button
+    movwf   temp3, b
+    xorlw   TURBO_MASK
+    movlw   0x0E
+    btfss   STATUS, Z
+    movf    temp3, w, b
+    andwf   poll_cnt, w, b
+    bz      set_button
+    return
+set_button
+    endm
+
     ;; Copy status from the GameCube buffer to the N64 buffer. This first
     ;; stage maps all axes, and maps GameCube buttons to virtual buttons.
 n64_translate_status
@@ -754,6 +776,8 @@ remap_virtual_button
     andlw   BTN_MASK | SPECIAL_MASK
     movwf   virtual_map, b
 
+    turbo_mode
+
     btfss   virtual_map, SPECIAL_BIT, b
     goto    set_virtual_button
     goto    set_special_button
@@ -763,6 +787,9 @@ remap_virtual_axis
     call    eeread
     andlw   BTN_MASK | SPECIAL_MASK
     movwf   virtual_map, b
+
+    turbo_mode
+
     goto    set_virtual_axis
 
     ;; Looks for the key combinations we use to change button mapping
@@ -941,17 +968,13 @@ menu_level2_layout
     movwf   EEADR, a
     call    eewrite
 
-    movf    nv_flags, w, b
-    andlw   LAYOUT_MASK
-    movwf   temp_key_map, b
-
     movlw   CONFIG_JS
-    eeprom_btn_addr temp_key_map, 0
+    eeprom_btn_addr nv_flags, 0
     call    eeread
     movwf   nv_config_js, b
 
     movlw   CONFIG_CS
-    eeprom_btn_addr temp_key_map, 0
+    eeprom_btn_addr nv_flags, 0
     call    eeread
     movwf   nv_config_cs, b
     goto    start_rumble_feedback
@@ -1094,15 +1117,35 @@ menu_level3_remap
 menu_level3_special
     movwf   EEDATA, a
 
+    ;; Turbo mode
+    movf    level3_button, w, b
+    andlw   ~LAYOUT_MASK
+    xorlw   BTN_RJ_UP
+    bnz     menu_level3_special_next
+
+    movf    level2_button, w, b
+    eeprom_btn_addr nv_flags, 0
+    call    eeread
+    andlw   SPECIAL_MASK | BTN_MASK
+    movwf   EEDATA, a
+
+    movlw   LAYOUT_MASK
+    andwf   level3_button, f, b
+    rrncf   level3_button, f, b
+    rrncf   level3_button, w, b
+    iorwf   EEDATA, f, a
+    bra     menu_level3_common
+
+menu_level3_special_next
     ;; Two buttons special mapping.
-    movf    EEDATA, w ,a
+    movf    level3_button, w, b
     andlw   ~0x01                                ; Check buttons A and B.
     xorlw   BTN_A
     bz      menu_level3_common - 2
 
     ;; Validate if one of the D-pad directions is pressed for the layout modifier function.
     ;; Save as a special button if so, return otherwise.
-    movf    EEDATA, w, a
+    movf    level3_button, w, b
     andlw   ~LAYOUT_MASK                         ; Check for any D-pad direction.
     bz      menu_level3_common - 2
     bcf     FLAG_TRIGGER
@@ -1123,13 +1166,8 @@ menu_level3_common
 
 menu_level3_common_save_mapping
     movf    temp2, w, b
-    mullw   EEPROM_BTN_BYTE                      ; Offset base on how many bytes per button.
-    movff   PRODL, EEADR
-    movf    nv_flags, w, b                       ; Add offset to EEPROM address to read the right custom buttons layout.
-    andlw   LAYOUT_MASK
-    mullw   EEPROM_LAYOUT_SIZE
-    movf    PRODL, w, a
-    addwf   EEADR, f, a
+    eeprom_btn_addr nv_flags, 0
+    movwf   EEADR, a
     call    eewrite
     bcf     FLAG_TRIGGER
     goto    start_rumble_feedback

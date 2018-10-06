@@ -387,7 +387,11 @@ n64_rx_command_start macro ctrl1
     clrf    FSR1H, a                             ; 1.5000us
     movlw   n64_command                          ; 1.5625us
     movwf   FSR1L, a                             ; 1.6250us
-    wait    .1                                   ; 1.6875us
+    if ctrl1
+        incf    poll_cnt, f, b                   ; 1.6875us
+    else
+        wait    .1                               ; 1.6875us
+    endif
     movlw   high crc_large_table                 ; 1.7500us  Load CRC table high address byte
     movwf   TBLPTRH, a                           ; 1.8125us  with spare time.
     rlcf    INDF1, f, a                          ; 1.8750us  Make room for the new bit.

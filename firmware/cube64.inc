@@ -147,6 +147,7 @@
     #define BTN_MASK            0x1F
     #define SPECIAL_MASK        0x20
     #define SPECIAL_BIT         5
+    #define TURBO_MASK          0x03
 
     #define AXIS_DEAD_ZONE      0x0A
     #define AXIS_BTN_THRS       0x30
@@ -181,6 +182,7 @@ eeprom_btn_addr macro layout, byte
     mullw   EEPROM_BTN_BYTE                      ; Offset base on how many bytes per button.
     movff   PRODL, temp3
     movf    layout, w, b                         ; Add offset to read in right buttons layout.
+    andlw   LAYOUT_MASK
     mullw   EEPROM_LAYOUT_SIZE
     movf    PRODL, w, a
     addwf   temp3, w, b
