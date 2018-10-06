@@ -368,6 +368,20 @@ map_button_to macro virtual, dest_byte, dest_bit
 next
     endm
 
+    ;; Map a virtual button to two N64 buttons. If the indicated button is the one
+    ;; currently in virtual_button, sets the corresponding N64 bit and returns.
+map_two_buttons_to macro virtual, dest_byte, dest_bit, dest_byte2, dest_bit2
+    local   next
+    movf    virtual_map, w, b
+    xorlw   virtual
+    btfss   STATUS, Z, a
+    goto    next
+    bsf     n64_status_buffer + dest_byte, dest_bit, a
+    bsf     n64_status_buffer + dest_byte2, dest_bit2, a
+    return
+next
+    endm
+
     ;; Sign an 8-bit 0x80-centered axis if sign=1.
     ;; Also apply a dead zone.
 apply_sign_deadzone macro src_byte, sign
@@ -670,10 +684,14 @@ set_virtual_axis
     ;; in virtual button, to a special function of the adapter. This set of virtual
     ;; buttons do not result in any key press on the host system.
 set_special_button
+    map_two_buttons_to   BTN_A_C_DOWN, N64_A, N64_C_DOWN
+    map_two_buttons_to   BTN_B_C_LEFT, N64_B, N64_C_LEFT
+
     btfsc   FLAG_LAYOUT_MODIFIER                 ; Allow only one level of layout modifier.
     bra     skip_layout_modifier
 
     ;; Check for layout modifier special function.
+    movf    virtual_map, w, b
     andlw   ~LAYOUT_MASK
     xorlw   BTN_MODIFIER
     bz      special_layout_modifier
@@ -1042,6 +1060,12 @@ menu_level3_remap
     ;; Accept the virtual button code for the special function destination in 'w'.
 menu_level3_special
     movwf   EEDATA, a
+
+    ;; Two buttons special mapping.
+    movf    EEDATA, w ,a
+    andlw   ~0x01                                ; Check buttons A and B.
+    xorlw   BTN_A
+    bz      menu_level3_common - 2
 
     ;; Validate if one of the D-pad directions is pressed for the layout modifier function.
     ;; Save as a special button if so, return otherwise.

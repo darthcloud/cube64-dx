@@ -129,6 +129,9 @@
     ;; Adapter internal special button, do not map to any button on the host system.
     cblock 0x20
         BTN_MODIFIER:4
+        BTN_FUTURE:.18
+        BTN_A_C_DOWN
+        BTN_B_C_LEFT
     endc
 
     #define CURVE_MASK          0x07
