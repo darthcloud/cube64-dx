@@ -900,7 +900,6 @@ check_remap_combo
     ;; and await button presses from the user indicating which menu option they want
     ;; access to. Selection is handled into remap_virtual_button since we need virtual
     ;; button codes.
-    bcf     GLED_PIN, a
     movff   atomic_flags, uncommit_flags
     bsf     UFLAG_WAITING_FOR_RELEASE
     bsf     UFLAG_MENU_LEVEL1
@@ -1502,9 +1501,22 @@ endif
     return
 
 update_led
-    movf    atomic_flags, w, b
-    btfsc   STATUS, Z, a
+    btfsc   AFLAG_MENU_LEVEL1
+    bcf     GLED_PIN, a
+ifdef __18F24Q10
+    btfsc   AFLAG_MENU_LEVEL2
+    bcf     RLED_PIN, a
+    btfsc   AFLAG_MENU_LEVEL3
     bsf     GLED_PIN, a
+endif
+
+    movf    atomic_flags, w, b
+    btfss   STATUS, Z, a
+    return
+    bsf     GLED_PIN, a
+ifdef __18F24Q10
+    bsf     RLED_PIN, a
+endif
     return
 
 

@@ -381,9 +381,9 @@ n64_rx_command_start macro ctrl1
         bsf     FLAG_CTRL2                       ; 1.1250us  2nd controller poll.
         incf    FSR2H, f, a                      ; 1.1875us  Point to buffers on bank 1.
     endif
-    btfss   GLED_PIN, a                          ; 1.2500us  Clear joystick buffer if in the menu.
+    tstfsz  atomic_flags, b                      ; 1.2500us  Clear joystick buffer if in the menu.
     clrf    n64_status_buffer + 2, a             ; 1.3125us
-    btfss   GLED_PIN, a                          ; 1.3750us
+    tstfsz  atomic_flags, b                      ; 1.3750us
     clrf    n64_status_buffer + 3, a             ; 1.4375us
     clrf    FSR1H, a                             ; 1.5000us
     movlw   n64_command                          ; 1.5625us
