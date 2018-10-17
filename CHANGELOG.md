@@ -1,5 +1,14 @@
 # Changelog
 
+## [4.0] - 2018-10-17
+### Added
+ - Kicad PCB design gerber/sources.
+ - PIC18F24Q10 support.
+
+### Changed
+ - Makefile now use PICKIT4 and IPECMD
+ - Schematic now in KiCad format.
+
 ## [3.5] - 2018-10-06
 ### Added
  - Pre-defined button layout.

@@ -8,7 +8,7 @@
     ;;   the Free Software Foundation; either version 2 of the License, or
     ;;   (at your option) any later version.
     ;;
-    ;; This firmware is designed to run on a PIC18F14K22 microcontroller
+    ;; This firmware is designed to run on a high-end PIC microcontroller
     ;; clocked at 64 MHz. The Nintendo device's bidirectional data line
     ;; is on RC0, serial receive is on RB5, serial transmit is on RB7.
     ;;

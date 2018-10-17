@@ -1,5 +1,7 @@
 ﻿# Cube64
 
+<p align="center"><img src=hardware/cube64_smd.png /></p>
+
 ## Introduction
 This is a project to build an adaptor for using GameCube controllers
 with N64 consoles. The motivation behind this is that the N64 has some
@@ -35,6 +37,7 @@ The default button mapping is as follows:
 GameCube | N64
 -------- | ---
 ![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_js.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_js.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_d.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_d.png)
 ![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_a.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_a.png)
 ![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_b.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_b.png)
 ![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_z.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_cright.png)
@@ -84,6 +87,7 @@ gameplay. To change the mapping for one button or axis direction:
 GameCube | N64
 -------- | ---
 ![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_js.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_js.png)
+![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_d.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_d.png)
 ![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_a.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_a.png)
 ![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_b.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_b.png)
 ![](https://github.com/darthcloud/cube64-dx/wiki/img/gc_z.png) | ![](https://github.com/darthcloud/cube64-dx/wiki/img/n64_z.png)
@@ -259,15 +263,21 @@ Digital input map for the 1st controller R button will map to the 2nd controller
 
 ## Hardware
 
-There are currently one supported version of the Cube64 hardware which uses
-a PIC18F14K22 microcontroller, this MCU is fast enough to be able to implement
-the full CRC computation. Two options are available for 5V supply:
+There are currently two versions of the Cube64 hardware:
 
-  1. Charge pump circuit.
+  - The "Cube64 DIY" uses a PIC18F14K22 microcontroller. Just about any
+    electronics hobbyist should be able to build it easily. 5V can be
+    provided either externally or by using a charge pump in 8-pin SOIC
+    package.
 
-  2. External 5V supply.
+  - The "Cube64 SMD" uses a PIC18F24Q10 microcontroller, and a
+    charge pump in 10-pin DFN package. PCB gerber and KiCad sources
+    are provided.
 
-It's quite convenient to simply add a USB B connector for the 5V supply.
+Both versions of the hardware have the same button remapping features
+and responsiveness, as the only difference in their firmware is a few lines
+worth of compile-time configuration. The DIP version of the Q10 could also
+be used for the DIY version, but the package is bigger.
 
 ## Status
 
@@ -287,14 +297,14 @@ reverse engineering.
 
 ##### firmware
 Source code for the firmware, in PIC assembly. It was developed
-using the open source "gputils" package. The firmware for the
-adaptor itself is "cube64.asm", but there are a few additional
+using the open source "gputils" package (use latest [snapshot](https://sourceforge.net/projects/gputils/files/snapshot_builds/src/)). The firmware for
+the adaptor itself is "cube64.asm", but there are a few additional
 test programs and libraries.
 
 ##### hardware
-This includes schematics for the adaptor, in PDF and gschem format.
-##### notes
+This includes schematics and PCB for the adaptor, in KiCad source format.
 
+##### notes
 Utilities and documentation produced while reverse engineering.
 
 ## Authors

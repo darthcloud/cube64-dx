@@ -8,9 +8,8 @@
     ;;   the Free Software Foundation; either version 2 of the License, or
     ;;   (at your option) any later version.
     ;;
-    ;; This firmware is designed to run on a PIC18F14K22 microcontroller
-    ;; clocked at 64 MHz using the internal 16 MHz clock multiplied by
-    ;; the 4x PLL.
+    ;; This firmware is designed to run on a high-end PIC microcontroller
+    ;; clocked at 64 MHz.
     ;;
     ;; See n64gc_comm.inc for code and documentation related to the protocol
     ;; used between here, the N64, and the GameCube.
