@@ -3,4 +3,8 @@
 *.lst
 *.pyc
 .python-version
-
+*.bak
+*.bck
+*.kicad_pcb-bak
+log*
+*.xml*
