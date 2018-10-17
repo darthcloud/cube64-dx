@@ -369,7 +369,8 @@ not_last_bit                                     ; 1.6250us
     ;; We get late into the first bit around 0.4 us. Use the spare cycle to init
     ;; pretty much everything.
 n64_rx_command_start macro ctrl1
-    wait    .4                                   ; 0.6875us  We get into the interrupt at around 0.4 us.
+    wait    .3                                   ; 0.6875us  We get into the interrupt at around 0.4 us.
+    movlb   0x00                                 ; 0.8750us  Make sure we are in right bank for Q10.
     btg     FSR2L, 2, a                          ; 0.9375us  Use last good regs copy.
     clrf    FSR2H, a                             ; 1.0000us  Point to buffers on bank 0.
     bsf     GAMECUBE_TRIS, a                     ; 1.0625us
@@ -380,9 +381,9 @@ n64_rx_command_start macro ctrl1
         bsf     FLAG_CTRL2                       ; 1.1250us  2nd controller poll.
         incf    FSR2H, f, a                      ; 1.1875us  Point to buffers on bank 1.
     endif
-    btfss   LED_PIN, a                           ; 1.2500us  Clear joystick buffer if in the menu.
+    btfss   GLED_PIN, a                          ; 1.2500us  Clear joystick buffer if in the menu.
     clrf    n64_status_buffer + 2, a             ; 1.3125us
-    btfss   LED_PIN, a                           ; 1.3750us
+    btfss   GLED_PIN, a                          ; 1.3750us
     clrf    n64_status_buffer + 3, a             ; 1.4375us
     clrf    FSR1H, a                             ; 1.5000us
     movlw   n64_command                          ; 1.5625us

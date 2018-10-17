@@ -243,8 +243,16 @@ set_interrupt macro
     movf    PORTA, w, a
     movf    PORTB, w, a
     nop
+ifdef __18F24Q10
+    banksel IOCBF
+    clrf    IOCBF, b
+else
     bcf     INTCON, RABIF, a
+endif
     bsf     INTCON, GIEH, a
+ifdef __18F24Q10
+    movlb   0x00
+endif
     endm
 
 clr_interrupt macro

@@ -22,6 +22,7 @@
     ;; and due to corners cut in the algorithm implementation to fit it on
     ;; this microcontroller.
     ;;
+    errorlevel -206
 
     ;; Definitions for the PIC18F14K22 version
     ifdef  __18F14K22
@@ -29,7 +30,7 @@
 
         CONFIG FOSC = IRC, PLLEN = ON, PCLKEN = OFF, FCMEN = OFF, IESO = OFF
         CONFIG PWRTEN = OFF, BOREN = OFF
-        CONFIG WDTEN = ON, WDTPS = 1
+        CONFIG WDTEN = ON, WDTPS = 4
         CONFIG HFOFST = ON, MCLRE = OFF
         CONFIG STVREN = OFF, LVP = OFF, BBSIZ = OFF, XINST = ON, DEBUG = OFF
         CONFIG CP0 = OFF, CP1 = OFF
@@ -47,9 +48,13 @@
         #define GAMECUBE_TRIS   TRISA, 4
         #define N64C_PIN        PORTA, 2
         #define N64C_TRIS       TRISA, 2
-        #define LED_PIN         LATA, 5
+        #define GLED_PIN         LATA, 5
 
-io_init macro
+mcu_init macro
+        movlw   0x70                             ; Set internal clock to 16 MHz.
+        movwf   OSCCON, a
+        pll_startup_delay                        ; Wait for PLL to shift frequency to 64 MHz.
+
         clrf    PORTA, a
         clrf    PORTB, a
         clrf    PORTC, a
@@ -73,9 +78,82 @@ io_init macro
         bsf     RCSTA, SPEN, a
         bsf     TXSTA, TXEN, a
         endm
+    else
+    ifdef  __18F24Q10
+        #include p18f24q10.inc
 
+        CONFIG FEXTOSC = OFF, RSTOSC = HFINTOSC_64MHZ
+        CONFIG CLKOUTEN = OFF, CSWEN = OFF, FCMEN = OFF
+        CONFIG MCLRE = INTMCLR, PWRTE = OFF, LPBOREN = OFF, BOREN = OFF
+        CONFIG BORV = VBOR_285, ZCD = OFF, PPS1WAY = ON, STVREN = OFF, DEBUG = OFF, XINST = ON
+        CONFIG WDTCPS = WDTCPS_4, WDTE = ON
+        CONFIG WDTCWS = WDTCWS_6, WDTCCS = LFINTOSC
+        CONFIG WRT0 = OFF, WRT1 = OFF
+        CONFIG WRTC = OFF, WRTB = OFF, WRTD = OFF, SCANE = OFF, LVP = OFF
+        CONFIG CP = OFF, CPD = OFF
+        CONFIG EBTR0 = OFF, EBTR1 = OFF
+        CONFIG EBTRB = OFF
+
+        #define EEADR           NVMADRL
+        #define EEDATA          NVMDATL
+
+        #define N64_PIN         PORTB, 2
+        #define N64_TRIS        TRISB, 2
+        #define N64_PIN2        PORTB, 3
+        #define N64_TRIS2       TRISB, 3
+        #define GAMECUBE_PIN    PORTC, 3
+        #define GAMECUBE_TRIS   TRISC, 3
+        #define N64C_PIN        PORTC, 2
+        #define N64C_TRIS       TRISC, 2
+        #define RLED_PIN        LATA, 6
+        #define GLED_PIN        LATA, 7
+
+mcu_init macro
+        movlb   0x0E                             ; Peripheral pin selection for UART.
+        movlw   0x17
+        movwf   RX1PPS, b
+        movlw   0x09
+        movwf   RC6PPS, b
+
+        movlb   0x0F
+
+        clrf    PORTA, a
+        clrf    PORTB, a
+        clrf    PORTC, a
+        movlw   0x0C                             ; Enable weak pull-ups.
+        movwf   WPUB, b
+        movlw   0x0C
+        movwf   WPUC, b
+        movlw   0x00
+        movwf   TRISA, a
+        movlw   0x0C
+        movwf   TRISB, a
+        movlw   0x8C
+        movwf   TRISC, a
+        movlw   0xC0                             ; Set LED pin open drain.
+        movwf   ODCONA, b
+        movlw   0x0C                             ; Not really needed for SI pins
+        movwf   ODCONB, b                        ; as we toggle TRIS register on TX.
+        movlw   0x0C                             ; But set anyway.
+        movwf   ODCONC, b
+        clrf    ANSELA, b                        ; Set IOs to digital.
+        clrf    ANSELB, b
+        clrf    ANSELC, b
+        bsf     IOCBN, IOCBN2, b                 ; Enable interrupt on N64_PIN.
+        bsf     IOCBN, IOCBN3, b                 ; enable interrupt on N64_PIN2.
+        movlw   0x21                             ; Set baudrate to 115200.
+        movwf   SPBRG, a
+        bsf     TXSTA, BRGH, a
+        bsf     RCSTA, SPEN, a
+        bsf     TXSTA, TXEN, a
+        movlb   0x00
+        movlw   0x31
+        movwf   NVMADRU, a                       ; Init NVM upper and high address bytes.
+        clrf    NVMADRH, a
+        endm
     else
         messg    "Unsupported processor"
+    endif
     endif
 
     ;; Delay of about ~2 ms that allow the PLL to shift the frequency to 64 MHz.
@@ -165,13 +243,18 @@ startup
     clrf    FSR2H, a
     clrf    FSR2L, a
     clr_interrupt                                ; Init interrupts.
+ifdef __18F24Q10
+    banksel PIE0
+    bsf     PIE0, IOCIE, b
+    bsf     IPR0, IOCIP, b
+    movlb   0x00
+    bsf     INTCON, IPEN, a
+else
     bsf     INTCON, RABIE, a
     bsf     INTCON2, RABIP, a
     bsf     RCON, IPEN, a
-    movlw   0x70                                 ; Set internal clock to 16 MHz.
-    movwf   OSCCON, a
-    pll_startup_delay                            ; Wait for PLL to shift frequency to 64 MHz.
-    io_init
+endif
+    mcu_init
 
     n64gc_init
     clrf    FSR0H, a
@@ -193,7 +276,10 @@ startup
     clrf    TBLPTRU, a                           ; Preload table upper byte. Same for all tables.
     movlw   high crc_large_table                 ; Preload table high byte for CRC table initially.
     movwf   TBLPTRH, a
-    bsf     LED_PIN, a
+    bsf     GLED_PIN, a
+ifdef __18F24Q10
+    bsf     RLED_PIN, a
+endif
 
     movlw   0x01                                 ; Set controller id to occupied slot.
     movwf   n64_slot_status, b
@@ -814,7 +900,7 @@ check_remap_combo
     ;; and await button presses from the user indicating which menu option they want
     ;; access to. Selection is handled into remap_virtual_button since we need virtual
     ;; button codes.
-    bcf     LED_PIN, a
+    bcf     GLED_PIN, a
     movff   atomic_flags, uncommit_flags
     bsf     UFLAG_WAITING_FOR_RELEASE
     bsf     UFLAG_MENU_LEVEL1
@@ -1266,17 +1352,36 @@ reset_next_byte
 
     ;; Read from address 'w' of the EEPROM, return in 'w'.
 eeread
+ifdef __18F24Q10
+    bsf     NVMCON0, NVMEN, a
+    movwf   NVMADRL, a
+    bsf     NVMCON1, RD, a
+    movf    NVMDAT, w, a
+    bcf     NVMCON0, NVMEN, a
+else
     movwf   EEADR, a
     bcf     EECON1, EEPGD, a                     ; Select EEPROM.
     bcf     EECON1, CFGS, a
     bsf     EECON1, RD, a
     movf    EEDATA, w, a
+endif
     return
 
     ;; Write to the EEPROM using the current EEADR and EEDATA values,
     ;; block until the write is complete.
 eewrite
     clrwdt
+ifdef __18F24Q10
+    bsf     NVMCON0, NVMEN, a
+    movlw   0x55                                 ; Write the magic sequence to NVMCON2
+    movwf   NVMCON2, a
+    movlw   0xAA
+    movwf   NVMCON2, a
+    bsf     NVMCON1, WR, a                       ; Begin write
+    btfsc   NVMCON1, WR, a
+    bra     $-2
+    bcf     NVMCON0, NVMEN, a
+else
     bcf     EECON1, EEPGD, a                     ; Select EEPROM.
     bcf     EECON1, CFGS, a
     bsf     EECON1, WREN, a                      ; Enable write
@@ -1288,15 +1393,26 @@ eewrite
     btfsc   EECON1, WR, a                        ; Wait for it to finish...
     goto    $-2
     bcf     EECON1, WREN, a                      ; Write protect
+endif
     return
 
     ;; Briefly enable the rumble motor on our own, as feedback during remap combos.
     ;; This use TMR0 in 16-bit mode and will provide feedback for 250 ms.
 start_rumble_feedback
     bsf     FLAG_RUMBLE_FEEDBACK
+ifdef __18F24Q10
+    banksel PIR0
+    bcf     PIR0, TMR0IF, b
+    movlb   0x00
+    movlw   0x48                                 ; FOSC/4, sync, 1:256 prescaler.
+    movwf   T0CON1, a
+    movlw   0x90                                 ; Enable 16-bit mode.
+    movwf   T0CON0, a
+else
     bcf     INTCON, TMR0IF, a                    ; Clear overflow bit.
     movlw   0x87                                 ; Enable 16-bit mode with 1:256 prescaler.
     movwf   T0CON, a
+endif
     movlw   0xC2
     movwf   TMR0H, a
     movlw   0xF6
@@ -1311,9 +1427,20 @@ update_rumble_feedback
     return
     bsf     FLAG_RUMBLE_MOTOR_ON
 
+ifdef __18F24Q10
+    banksel PIR0
+    btfsc   PIR0, TMR0IF, b
+    bra     disable_timer
+    movlb   0x00
+    return
+disable_timer
+    movlb   0x00
+    bcf     T0CON0, T0EN, a
+else
     btfss   INTCON, TMR0IF, a
     return
     bcf     T0CON, TMR0ON, a
+endif
     movf    flags, w, b
     andlw   ~BIT_RUMBLE_FEEDBACK                 ; bcf     FLAG_RUMBLE_FEEDBACK
     andlw   ~BIT_RUMBLE_MOTOR_ON                 ; bcf     FLAG_RUMBLE_MOTOR_ON, We need to turn off the motor when we're done.
@@ -1325,9 +1452,19 @@ update_rumble_feedback
     ;; accessories. The rumble feedback already provide 250 ms. This set TMR0 for
     ;; another 750 ms.
 start_slot_empty_timer
+ifdef __18F24Q10
+    banksel PIR0
+    bcf     PIR0, TMR0IF, b
+    movlb   0x00
+    movlw   0x48                                 ; FOSC/4, sync, 1:256 prescaler.
+    movwf   T0CON1, a
+    movlw   0x90                                 ; Enable 16-bit mode.
+    movwf   T0CON0, a
+else
     bcf     INTCON, TMR0IF, a                    ; Clear overflow bit.
     movlw   0x87                                 ; Enable 16-bit mode with 1:256 prescaler.
     movwf   T0CON, a
+endif
     movlw   0x48
     movwf   TMR0H, a
     movlw   0xE4
@@ -1341,14 +1478,22 @@ update_slot_empty_timer
     return
     btfsc   FLAG_RUMBLE_FEEDBACK                 ; Let rumble feedback finish first.
     return
+ifdef __18F24Q10
+    btfss   T0CON0, T0EN, a                      ; Init timer.
+else
     btfss   T0CON, TMR0ON, a                     ; Init timer.
+endif
     call    start_slot_empty_timer
     btfss   INTCON, TMR0IF, a
     return
 
     movf    flags, w ,b
     andlw   ~BIT_FORCE_EMPTIED                   ; bcf     FLAG_FORCE_EMPTIED
+ifdef __18F24Q10
+    bcf     T0CON0, T0EN, a
+else
     bcf     T0CON, TMR0ON, a
+endif
     movf    target_slot_status, f, b
     btfsc   STATUS, Z, a                         ; If 0x00 we need to set bypass mode.
     iorlw   BIT_BYPASS_MODE                      ; bsf     FLAG_BYPASS_MODE
@@ -1359,7 +1504,7 @@ update_slot_empty_timer
 update_led
     movf    atomic_flags, w, b
     btfsc   STATUS, Z, a
-    bsf     LED_PIN, a
+    bsf     GLED_PIN, a
     return
 
 
@@ -1680,6 +1825,23 @@ gc_keep_waiting_for_idle
     ;; Need to wait at least 15 us between GameCube controller commands.
     ;; Wait 32 us to be safe.
 gamecube_bus_wait
+ifdef __18F24Q10
+    banksel PIR4
+    bcf     PIR4, TMR1IF, b
+    movlw   0x01                                 ; Set FOSC/4 clock.
+    movwf   TMR1CLK, a
+    movlw   0x32                                 ; Set single op R/W and 1:8 prescaler.
+    movwf   T1CON, a
+    setf    TMR1H, a
+    movlw   0xC0
+    movwf   TMR1L, a                             ; Clear timer1.
+    bsf     T1CON, TMR1ON, a                     ; Enable timer1 and
+    btfss   PIR4,  TMR1IF, b                     ; wait for timer1 overflow.
+    bra     $-2
+    bcf     PIR4, TMR1IF, b                      ; Clear overflow bit and
+    bcf     T1CON, TMR1ON, a                     ; disable timer1.
+    movlb   0x00
+else
     bcf     PIR1, TMR1IF, a                      ; Clear overflow bit.
     movlw   0xB0                                 ; Set single op R/W and 1:8 prescaler.
     movwf   T1CON, a
@@ -1691,6 +1853,7 @@ gamecube_bus_wait
     bra     $-2
     bcf     PIR1, TMR1IF, a                      ; Clear overflow bit and
     bcf     T1CON, TMR1ON, a                     ; disable timer1.
+endif
     return
 
     ;; To support the WaveBird we must poll the controller identity first.
