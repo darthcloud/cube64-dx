@@ -1,0 +1,77 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP +3V3
+D power-flag symbol +3.3V
+K Power Flag Symbol
+$ENDCMP
+#
+$CMP +5V
+D power-flag symbol
+K Power Flag Symbol
+$ENDCMP
+#
+$CMP C
+D Unpolarized capacitor
+K cap capacitor
+F ~
+$ENDCMP
+#
+$CMP Conn_01x02
+D Generic connector, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)
+K connector
+F ~
+$ENDCMP
+#
+$CMP Conn_01x03
+D Generic connector, single row, 01x03, script generated (kicad-library-utils/schlib/autogen/connector/)
+K connector
+F ~
+$ENDCMP
+#
+$CMP Conn_01x05
+D Generic connector, single row, 01x05, script generated (kicad-library-utils/schlib/autogen/connector/)
+K connector
+F ~
+$ENDCMP
+#
+$CMP Conn_01x06
+D Generic connector, single row, 01x06, script generated (kicad-library-utils/schlib/autogen/connector/)
+K connector
+F ~
+$ENDCMP
+#
+$CMP Conn_02x06_Odd_Even
+D Generic connector, double row, 02x06, odd/even pin numbering scheme (row 1 odd numbers, row 2 even numbers), script generated (kicad-library-utils/schlib/autogen/connector/)
+K connector
+F ~
+$ENDCMP
+#
+$CMP GND
+D (reference supply) ground power-flag symbol
+K Power Flag Symbol
+$ENDCMP
+#
+$CMP LED
+D LED generic
+K led diode
+F ~
+$ENDCMP
+#
+$CMP LED_Dual_AACC
+D LED dual, 4-pin
+K led diode bicolor dual
+F ~
+$ENDCMP
+#
+$CMP R
+D Resistor US symbol
+K r res resistor
+F ~
+$ENDCMP
+#
+$CMP VPP
+D programming volatge power-flag symbol
+K Power Flag Symbol
+$ENDCMP
+#
+#End Doc Library

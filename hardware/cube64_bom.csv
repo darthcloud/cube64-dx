@@ -1,0 +1,26 @@
+Component,Description,Part,References,Value,Footprint,Quantity Per PCB,Datasheet,Digikey Part
+1,Unpolarized capacitor,C,C3,0.1u,C_0402_1005Metric,1,~,1276-1004-1-ND
+2,Unpolarized capacitor,C,C1 C2 C4,2.2u,C_0402_1005Metric,3,~,1276-1888-1-ND
+3,Unpolarized capacitor,C,C5,4.7u,C_0603_1608Metric,1,~,1276-1907-1-ND
+4,"LED dual, 4-pin",LED_Dual_AACC,D1,LTST-C195KGJRKT,D_0606_1616Metric,1,https://media.digikey.com/pdf/Data%20Sheets/Lite-On%20PDFs/LTST-C195KGJRKT.pdf,160-1452-1-ND
+5,Resistor US symbol,R,R16,100K,R_0402_1005Metric,1,~,RMCF0402JT100KCT-ND
+6,Resistor US symbol,R,R3 R9,1K,R_0402_1005Metric,2,~,311-1.0KJRCT-ND
+7,Resistor US symbol,R,R15,402K,R_0402_1005Metric,1,~,YAG3151CT-ND
+8,Resistor US symbol,R,R13 R14,64.9,R_0402_1005Metric,2,~,RMCF0402FT64R9CT-ND
+9,,LTC3203B-1,U2,LTC3203B-1,DFN-10-1EP_3x3mm_P0.5mm_EP1.55x2.48mm,1,http://www.linear.com/docs/15197,LTC3203BEDD-1#PBF-ND
+10,,PIC18F24Q10,U1,PIC18F24Q10,QFN-28-1EP_6x6mm_P0.65mm_EP4.25x4.25mm_ThermalVias,1,http://www.microchip.com/mymicrochip/filehandler.aspx?ddocname=en601194,PIC18F24Q10-I/ML-ND
+
+
+
+
+
+Component Groups:,13
+Component Count:,40
+Fitted Components:,14
+Number of PCBs:,1
+Total components:,14
+Schematic Version:,A
+Schematic Date:,2018-10-10
+BoM Date:,Wed 10 Oct 2018 10:24:46 PM EDT
+Schematic Source:,cube64-dx/hardware/cube64.sch
+KiCad Version:,Eeschema 5.0.0-fee4fd1~66~ubuntu18.04.1

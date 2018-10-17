@@ -1,0 +1,3 @@
+(fp_lib_table
+  (lib (name cube64)(type KiCad)(uri ${KIPRJMOD}/cube64.pretty)(options "")(descr ""))
+)

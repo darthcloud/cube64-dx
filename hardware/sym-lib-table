@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name cube64)(type Legacy)(uri $HOME/cube64-dx/hardware/cube64.lib)(options "")(descr ""))
+)
