@@ -35,6 +35,7 @@
     ;;   0      0x01 if transitions detected on RA4, 0x00 otherwise.
     ;;   1-n    Received data
     ;;
+    errorlevel -206
 
     ;; Definitions for the PIC18F14K22 version
     ifdef  __18F14K22
@@ -52,7 +53,17 @@
         CONFIG EBTR0 = OFF, EBTR1 = OFF
         CONFIG EBTRB = OFF
 
-io_init macro
+        ;; Hardware declarations
+        #define PROBE_PIN       PORTA, 4
+        #define NINTENDO_PIN    PORTC, 0
+        #define NINTENDO_TRIS   TRISC, 0
+        #define RX232_PIN       PORTB, 5
+        #define TX232_PIN       PORTB, 7
+
+mcu_init macro
+        movlw   0x70                             ; Set internal clock to 16 MHz.
+        movwf   OSCCON, a
+        pll_startup_delay                        ; Wait for PLL to shift frequency to 64 MHz.
         clrf    PORTA, a
         clrf    PORTB, a
         clrf    PORTC, a
@@ -74,12 +85,67 @@ io_init macro
         bsf     RCSTA, CREN, a
         bsf     IOCA, IOCA4, a                   ; Enable interrupt on RA4.
         endm
+    else
+    ifdef  __18F24Q10
+        #include p18f24q10.inc
 
+        CONFIG FEXTOSC = OFF, RSTOSC = HFINTOSC_64MHZ
+        CONFIG CLKOUTEN = OFF, CSWEN = OFF, FCMEN = OFF
+        CONFIG MCLRE = INTMCLR, PWRTE = OFF, LPBOREN = OFF, BOREN = OFF
+        CONFIG BORV = VBOR_285, ZCD = OFF, PPS1WAY = ON, STVREN = OFF, DEBUG = OFF, XINST = ON
+        CONFIG WDTCPS = WDTCPS_4, WDTE = ON
+        CONFIG WDTCWS = WDTCWS_6, WDTCCS = LFINTOSC
+        CONFIG WRT0 = OFF, WRT1 = OFF
+        CONFIG WRTC = OFF, WRTB = OFF, WRTD = OFF, SCANE = OFF, LVP = OFF
+        CONFIG CP = OFF, CPD = OFF
+        CONFIG EBTR0 = OFF, EBTR1 = OFF
+        CONFIG EBTRB = OFF
+
+        ;; Hardware declarations
+        #define PROBE_PIN       PORTB, 2
+        #define NINTENDO_PIN    PORTC, 3
+        #define NINTENDO_TRIS   TRISC, 3
+        #define RX232_PIN       PORTC, 7
+        #define TX232_PIN       PORTC, 6
+
+mcu_init macro
+        movlb   0x0E                             ; Peripheral pin selection for UART.
+        movlw   0x17
+        movwf   RX1PPS, b
+        movlw   0x09
+        movwf   RC6PPS, b
+
+        movlb   0x0F
+
+        clrf    PORTA, a
+        clrf    PORTB, a
+        clrf    PORTC, a
+        movlw   0x00
+        movwf   TRISA, a
+        movlw   0x04
+        movwf   TRISB, a
+        movlw   0x88
+        movwf   TRISC, a
+        movlw   0x08                             ; Not really needed for SI pins
+        movwf   ODCONC, b                        ; as we toggle TRIS register on TX.
+        clrf    ANSELA, b                        ; Set IOs to digital.
+        clrf    ANSELB, b
+        clrf    ANSELC, b
+        movlw   0x21                             ; Set baudrate to 115200.
+        movwf   SPBRG, a
+        bsf     TXSTA, BRGH, a
+        bsf     RCSTA, SPEN, a
+        bsf     TXSTA, TXEN, a
+        bsf     RCSTA, CREN, a
+        bsf     IOCBP, IOCBP0, b                 ; Enable interrupt on RB0.
+        movlb   0x00
+        endm
     else
         messg    "Unsupported processor"
     endif
+    endif
 
-    ;; Delay of about ~2 ms that allow the PLL to shift the frequency to 64 MHz.
+    ;; Delay of about ~2 ms that allow the PLL to shift the frequency to 64 MHz on K22.
 pll_startup_delay macro
     bcf     INTCON, TMR0IF, a                    ; Clear overflow bit.
     movlw   0x44                                 ; Set 8-bit mode and 1:32 prescaler.
@@ -93,13 +159,6 @@ pll_startup_delay macro
     endm
 
     #include n64gc_comm.inc
-
-    ;; Hardware declarations
-    #define PROBE_PIN       PORTA, 4
-    #define NINTENDO_PIN    PORTC, 0
-    #define NINTENDO_TRIS   TRISC, 0
-    #define RX232_PIN       PORTB, 5
-    #define TX232_PIN       PORTB, 7
 
     ;; Reset and interrupt vectors
     org 0x00
@@ -124,10 +183,7 @@ pll_startup_delay macro
 startup
     movlb   0x00                                 ; Set bank 0 active.
     bcf     INTCON, GIE, a                       ; Disable interrupts.
-    movlw   0x70                                 ; Set internal clock to 16 MHz.
-    movwf   OSCCON, a
-    pll_startup_delay                            ; Wait for PLL to shift frequency to 64 MHz.
-    io_init
+    mcu_init
     n64gc_init
     clrf    FSR1H, a
 
@@ -139,7 +195,13 @@ main_loop
 
     movf    PORTA, w, a                          ; Clear RA4 transition.
     nop
+ifdef __18F24Q10
+    banksel IOCBF
+    bcf     IOCBF, IOCBF0, b
+    movlb   0x00
+else
     bcf     INTCON, RABIF, a
+endif
 
     call    serial_rx                            ; Save the transmit and receive counts
     movwf   cmd_tx_count, b
@@ -175,8 +237,16 @@ nothing_to_transmit
     call    nintendo_rx
 
     movlw   0x00                                 ; Transmit the transition detection byte
+ifdef __18F24Q10
+    banksel IOCBF
+    btfsc   IOCBF, IOCBF0, b
+else
     btfsc   INTCON, RABIF, a
+endif
     movlw   0x01
+ifdef __18F24Q10
+    movlb   0x00
+endif
     call    serial_tx
 
     movlw   buffer                               ; Send the data we received
@@ -195,8 +265,16 @@ rx_read_loop
 
 serial_rx
     clrwdt
+ifdef __18F24Q10
+    banksel PIR3
+    btfss   PIR3, RC1IF, b
+else
     btfss   PIR1, RCIF, a
+endif
     bra     serial_rx
+ifdef __18F24Q10
+    movlb   0x00
+endif
     movf    RCREG, w, a
     return
 
