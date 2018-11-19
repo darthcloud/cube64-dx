@@ -313,6 +313,8 @@ main_loop
     call    update_slot_empty_timer              ; Report slot empty for 1 s following adaptor mode change.
     call    gamecube_poll_status                 ; The GameCube poll takes place during the dead period
     call    n64_translate_status                 ; between incoming N64 commands, hopefully.
+    btfsc   FLAG_MUTE
+    call    clear_first_ctrl_btns
     btg     FSR2L, 2, a                          ; Set older regs copy as working regs.
     call    gamecube_bus_wait
     goto    main_loop
@@ -329,6 +331,12 @@ clear_loop
     bra     clear_loop
     return
 
+    ;; Keep only Z & Start bit.
+clear_first_ctrl_btns
+    movlw   0x30
+    andwf   n64_status_buffer + 0, f, a
+    clrf    n64_status_buffer + 1, a
+    return
 
     ;; *******************************************************************************
     ;; ******************************************************  Axis Calibration  *****
@@ -449,6 +457,16 @@ map_button_to macro virtual, dest_byte, dest_bit
     btfss   STATUS, Z, a
     goto    next
     bsf     n64_status_buffer + dest_byte, dest_bit, a
+    if dest_byte == 0 && dest_bit == 7
+        incf    FSR2H, f, a
+        bsf     n64_status_buffer + N64_A, a
+        clrf    FSR2H, a
+    endif
+    if dest_byte == 0 && dest_bit == 6
+        incf    FSR2H, f, a
+        bsf     n64_status_buffer + N64_B, a
+        clrf    FSR2H, a
+    endif
     if dest_byte == 1 && dest_bit == 4
         incf    FSR2H, f, a
         bsf     n64_status_buffer + N64_Z, a
@@ -704,6 +722,7 @@ n64_translate_restart
     clrf    n64_status_buffer + 3, a
     clrf    FSR2H, a
     bsf     FLAG_NO_VIRTUAL_BTNS
+    bcf     FLAG_MUTE
 
     map_button_from     GC_A,       BTN_A
     map_button_from     GC_B,       BTN_B
@@ -796,6 +815,12 @@ set_virtual_axis
 set_special_button
     map_two_buttons_to   BTN_A_C_DOWN, N64_A, N64_C_DOWN
     map_two_buttons_to   BTN_B_C_LEFT, N64_B, N64_C_LEFT
+
+    ;; Check for 1st CTRL mute.
+    movf    virtual_map, w, b
+    xorlw   BTN_MUTE
+    btfsc   STATUS, Z
+    bsf     FLAG_MUTE
 
     btfsc   FLAG_LAYOUT_MODIFIER                 ; Allow only one level of layout modifier.
     bra     skip_layout_modifier
@@ -1225,6 +1250,11 @@ menu_level3_special_next
     movf    level3_button, w, b
     andlw   ~0x01                                ; Check buttons A and B.
     xorlw   BTN_A
+    bz      menu_level3_common - 2
+
+    ;; 1st CTRL mute.
+    movf    level3_button, w, b
+    xorlw   BTN_X
     bz      menu_level3_common - 2
 
     ;; Validate if one of the D-pad directions is pressed for the layout modifier function.

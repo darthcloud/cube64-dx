@@ -57,6 +57,9 @@
     #define FLAG_CS                     flags2, 4, b
     #define FLAG_AXIS_Y                 flags2, 5, b
 
+    ;; 1st controller mute flag.
+    #define FLAG_MUTE                   flags2, 6, b
+
     ;; Menu multi-level option flags.
     #define OFLAG_MODE                   option_flags, 0, b
     #define OFLAG_LAYOUT                 option_flags, 1, b
@@ -133,6 +136,7 @@
         BTN_FUTURE:.18
         BTN_A_C_DOWN
         BTN_B_C_LEFT
+        BTN_MUTE
     endc
 
     #define CURVE_MASK          0x07
