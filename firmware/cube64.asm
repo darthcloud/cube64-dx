@@ -306,8 +306,6 @@ int_reentry
     set_interrupt
     call    gamecube_wait_for_idle
     call    gamecube_init
-main_loop
-    clrwdt
     call    update_led
     call    update_rumble_feedback               ; Give feedback for remapping operations using the rumble motor.
     call    update_slot_empty_timer              ; Report slot empty for 1 s following adaptor mode change.
@@ -317,6 +315,8 @@ main_loop
     call    clear_first_ctrl_btns
     btg     FSR2L, 2, a                          ; Set older regs copy as working regs.
     call    gamecube_bus_wait
+main_loop
+    clrwdt
     goto    main_loop
 
     ;; n64_status_buffer init.
@@ -1555,14 +1555,17 @@ endif
 
 n64_reinit
     clrf    FSR1H, a
-    clrf    FSR2H, a
     btg     FSR2L, 2, a
     bsf     N64C_TRIS, a
 
     bcf     FLAG_AXIS
     bcf     FLAG_LAYOUT_MODIFIER
     bcf     FLAG_CTRL2
+    btfss   FSR2H, 0, a
     return
+    clrf    FSR2H, a
+    set_interrupt
+    goto    main_loop
 
     ;; Service commands coming in from the N64
 n64_detect_command
