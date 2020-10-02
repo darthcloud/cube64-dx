@@ -1,7 +1,7 @@
 See my new project:\
 BlueRetro - Multiplayer Bluetooth controllers adapter for retro video game consoles\
-[Main hackaday.io page](https://hackaday.io/project/170365-blueretro)\
-[Software files repository](https://github.com/darthcloud/BlueRetro)
+<https://hackaday.io/project/170365-blueretro>\
+<https://github.com/darthcloud/BlueRetro>
 
 # Cube64
 
