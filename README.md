@@ -31,7 +31,7 @@ the complexity of reverse engineering and writing code is done for you ;)
 
 ## Discussion
 
-Check out the mailing list: <https://groups.google.com/forum/#!forum/cube64/>
+https://github.com/darthcloud/cube64-dx/discussions
 
 ## Usage
 
