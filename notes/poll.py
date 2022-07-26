@@ -26,6 +26,7 @@ dol_wb_assoc_req = namedtuple('dol_wb_assoc_req', 'cmd id')
 identity_resp = namedtuple('identity_resp', 'id info')
 status_resp = namedtuple('status_resp', 'buttons x_axis y_axis')
 dol_status_resp = namedtuple('dol_status_resp', 'buttons x_axis y_axis cx_axis cy_axis l_trigger r_trigger')
+dol_full_status_resp = namedtuple('dol_full_status_resp', 'buttons x_axis y_axis cx_axis cy_axis l_trigger r_trigger a_press b_press')
 
 RED='\x1b[1;91m'
 GREEN='\x1b[1;92m'
@@ -42,6 +43,7 @@ STATUS = 0x01
 READ = 0x02
 WRITE = 0x03
 DOL_STATUS = 0x40
+DOL_FULL_STATUS = 0x43
 WB_INIT = 0x4E
 
 MOUSE = 0x02
@@ -92,7 +94,10 @@ BUTTON = {NUS:OrderedDict(
               ('cx_axis', [bmap('CX',0xFF,YELLOW)]),
               ('cy_axis', [bmap('CY',0xFF,YELLOW)]),
               ('l_trigger', [bmap('AL',0xFF,LGRAY)]),
-              ('r_trigger', [bmap('AR',0xFF,LGRAY)])])}
+              ('r_trigger', [bmap('AR',0xFF,LGRAY)]),
+              ('a_press', [bmap('A',0xFF,CYAN)]), # A & B pressure only work with DS5 prototype (dev kit) controllers
+              ('b_press', [bmap('B',0xFF,RED)]),
+              ])}
 
 class Bus(Bus):
     def identify(self):
@@ -129,8 +134,8 @@ class Bus(Bus):
           reply = self.bridge.write(bytes([STATUS]), 4)[1]
           return status_resp._make(struct.unpack('>H2b', reply))
         elif system == DOL:
-          reply = self.bridge.write(struct.pack(">BH", DOL_STATUS, 0x0300), 8)[1]
-          return dol_status_resp._make(struct.unpack('>H6B', reply))
+          reply = self.bridge.write(struct.pack(">BH", DOL_FULL_STATUS, 0x0000), 10)[1]
+          return dol_full_status_resp._make(struct.unpack('>H8B', reply))
         else:
           print("Unknown system ID: {}".format(system))
           sys.exit()
